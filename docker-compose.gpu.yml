@@ -136,7 +136,7 @@ services:
       COSYVOICE_TIMEOUT_SECONDS: 90
       COSYVOICE_VOICE: default_zh
       COSYVOICE_SAMPLE_RATE: 22050
-      COSYVOICE_SPEED: 1.12
+      COSYVOICE_SPEED: 1.25
       COSYVOICE_SEED: 3407
       COSYVOICE_EXTRA_PAYLOAD: "{}"
       DATABASE_URL: sqlite+aiosqlite:////data/mock_interview.db
