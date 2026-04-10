@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     LLM_EVALUATION_MODEL: str = ""
     LLM_VERIFIER_PROFILE: str = ""
     LLM_VERIFIER_MODEL: str = ""
+    LLM_ROUTING_STRATEGY: str = "balanced"
 
     CLOUD_LLM_ENABLED: bool = False
     CLOUD_LLM_BASE_URL: str = ""

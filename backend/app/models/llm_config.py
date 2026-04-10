@@ -19,6 +19,11 @@ class LLMRuntimeConfig(Base):
     disable_thinking_override: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True
     )
+    routing_strategy: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="balanced",
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

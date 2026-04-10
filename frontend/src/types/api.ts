@@ -63,7 +63,22 @@ export interface LLMProfilesResponse {
   active_profile: LLMProfileName
   active_model: string | null
   disable_thinking_override: boolean | null
+  routing_strategy: 'low_latency' | 'balanced' | 'quality'
+  routing_strategies: {
+    name: 'low_latency' | 'balanced' | 'quality'
+    label: string
+    description: string
+  }[]
   active_runtime: LLMRuntimeActive
+  task_routes: Record<
+    string,
+    {
+      profile: LLMProfileName
+      model: string
+      disable_thinking: boolean
+      base_url: string
+    }
+  >
   profiles: LLMProfileOption[]
 }
 
@@ -71,6 +86,7 @@ export interface UpdateLLMRuntimePayload {
   profile: LLMProfileName
   model?: string | null
   disable_thinking?: boolean | null
+  routing_strategy?: 'low_latency' | 'balanced' | 'quality' | null
 }
 
 export interface BehaviorFrameInput {

@@ -116,6 +116,7 @@ services:
       LLM_EVALUATION_MODEL: ""
       LLM_VERIFIER_PROFILE: ""
       LLM_VERIFIER_MODEL: ""
+      LLM_ROUTING_STRATEGY: balanced
       CLOUD_LLM_ENABLED: "false"
       CLOUD_LLM_BASE_URL: ""
       CLOUD_LLM_API_KEY: ""

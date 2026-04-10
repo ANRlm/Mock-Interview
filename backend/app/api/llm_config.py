@@ -14,6 +14,9 @@ class LLMRuntimeUpdate(BaseModel):
     profile: str = Field(pattern="^(local|cloud)$")
     model: str | None = Field(default=None, max_length=160)
     disable_thinking: bool | None = None
+    routing_strategy: str | None = Field(
+        default=None, pattern="^(low_latency|balanced|quality)$"
+    )
 
 
 @router.get("/profiles")
@@ -31,6 +34,7 @@ async def update_runtime(
             profile_name=payload.profile,
             model=payload.model,
             disable_thinking=payload.disable_thinking,
+            routing_strategy=payload.routing_strategy,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

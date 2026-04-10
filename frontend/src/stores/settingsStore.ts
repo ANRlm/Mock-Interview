@@ -10,12 +10,14 @@ interface SettingsState {
   llmProfile: LLMProfileName
   llmModel: string
   llmDisableThinking: boolean
+  llmRoutingStrategy: 'low_latency' | 'balanced' | 'quality'
   setRole: (role: JobRole) => void
   setSubRole: (subRole: string) => void
   setResumeFile: (file: File | null) => void
   setLlmProfile: (profile: LLMProfileName) => void
   setLlmModel: (model: string) => void
   setLlmDisableThinking: (disabled: boolean) => void
+  setLlmRoutingStrategy: (strategy: 'low_latency' | 'balanced' | 'quality') => void
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -25,10 +27,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   llmProfile: 'local',
   llmModel: '',
   llmDisableThinking: true,
+  llmRoutingStrategy: 'balanced',
   setRole: (selectedRole) => set({ selectedRole }),
   setSubRole: (subRole) => set({ subRole }),
   setResumeFile: (resumeFile) => set({ resumeFile }),
   setLlmProfile: (llmProfile) => set({ llmProfile }),
   setLlmModel: (llmModel) => set({ llmModel }),
   setLlmDisableThinking: (llmDisableThinking) => set({ llmDisableThinking }),
+  setLlmRoutingStrategy: (llmRoutingStrategy) => set({ llmRoutingStrategy }),
 }))

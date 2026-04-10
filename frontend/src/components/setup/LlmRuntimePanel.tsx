@@ -16,7 +16,16 @@ interface RuntimeState {
 }
 
 export function LlmRuntimePanel() {
-  const { llmProfile, llmModel, llmDisableThinking, setLlmProfile, setLlmModel, setLlmDisableThinking } = useSettingsStore()
+  const {
+    llmProfile,
+    llmModel,
+    llmDisableThinking,
+    llmRoutingStrategy,
+    setLlmProfile,
+    setLlmModel,
+    setLlmDisableThinking,
+    setLlmRoutingStrategy,
+  } = useSettingsStore()
   const [state, setState] = useState<RuntimeState>({
     loading: true,
     saving: false,
@@ -36,6 +45,7 @@ export function LlmRuntimePanel() {
         setLlmProfile(data.active_profile)
         setLlmModel(data.active_model ?? data.active_runtime.model)
         setLlmDisableThinking(data.active_runtime.disable_thinking)
+        setLlmRoutingStrategy(data.routing_strategy)
       })
       .catch((error: unknown) => {
         if (disposed) {
@@ -48,7 +58,7 @@ export function LlmRuntimePanel() {
     return () => {
       disposed = true
     }
-  }, [setLlmDisableThinking, setLlmModel, setLlmProfile])
+  }, [setLlmDisableThinking, setLlmModel, setLlmProfile, setLlmRoutingStrategy])
 
   const profileMap = useMemo(() => {
     const map = new Map<LLMProfileName, { enabled: boolean; defaultModel: string; label: string }>()
@@ -71,11 +81,13 @@ export function LlmRuntimePanel() {
         profile: llmProfile,
         model: llmModel.trim() || null,
         disable_thinking: llmDisableThinking,
+        routing_strategy: llmRoutingStrategy,
       })
       setState({ loading: false, saving: false, error: null, data: updated })
       setLlmProfile(updated.active_profile)
       setLlmModel(updated.active_model ?? updated.active_runtime.model)
       setLlmDisableThinking(updated.active_runtime.disable_thinking)
+      setLlmRoutingStrategy(updated.routing_strategy)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '更新 LLM 配置失败'
       setState((prev) => ({ ...prev, saving: false, error: message }))
@@ -121,6 +133,28 @@ export function LlmRuntimePanel() {
         </div>
 
         <div className="space-y-2">
+          <p className="text-xs text-slate-400">任务路由策略</p>
+          <div className="grid gap-2 md:grid-cols-3">
+            {(state.data?.routing_strategies ?? []).map((item) => (
+              <button
+                key={item.name}
+                type="button"
+                disabled={state.saving}
+                onClick={() => setLlmRoutingStrategy(item.name)}
+                className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                  llmRoutingStrategy === item.name
+                    ? 'border-cyan-400 bg-cyan-400/10'
+                    : 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
+                }`}
+              >
+                <p className="font-medium text-slate-100">{item.label}</p>
+                <p className="mt-1 text-slate-400">{item.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
           <p className="text-xs text-slate-400">模型名称（可选覆盖）</p>
           <Input
             value={llmModel}
@@ -148,6 +182,19 @@ export function LlmRuntimePanel() {
             <Badge variant="secondary">当前: {state.data.active_runtime.label} / {state.data.active_runtime.model}</Badge>
           ) : null}
         </div>
+
+        {state.data?.task_routes ? (
+          <div className="space-y-2 rounded-md border border-slate-800 bg-slate-950/50 p-3">
+            <p className="text-xs uppercase tracking-widest text-slate-400">任务级路由预览</p>
+            <div className="grid gap-2 text-xs text-slate-300">
+              {Object.entries(state.data.task_routes).map(([task, route]) => (
+                <p key={task}>
+                  {task}: {route.profile} / {route.model || '-'} / thinking {route.disable_thinking ? 'off' : 'on'}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
