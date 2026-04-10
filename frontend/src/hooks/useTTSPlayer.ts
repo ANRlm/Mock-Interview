@@ -5,6 +5,8 @@ interface QueueItem {
   format: 'wav' | 'mp3'
 }
 
+const CROSSFADE_MS = 20
+
 interface UseTTSPlayerResult {
   playing: boolean
   queueSize: number
@@ -35,6 +37,10 @@ export function useTTSPlayer(onQueueFinished?: () => void): UseTTSPlayerResult {
   }, [onQueueFinished])
 
   const playNextRef = useRef<() => void>(() => undefined)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
+  const gainNodeRef = useRef<GainNode | null>(null)
+  const decodeChainRef = useRef(Promise.resolve())
 
   const clear = useCallback(() => {
     queueRef.current = []
@@ -46,6 +52,19 @@ export function useTTSPlayer(onQueueFinished?: () => void): UseTTSPlayerResult {
       audioRef.current.pause()
       audioRef.current.removeAttribute('src')
       audioRef.current.load()
+    }
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.stop()
+      } catch {
+        // ignore
+      }
+      sourceNodeRef.current.disconnect()
+      sourceNodeRef.current = null
+    }
+    if (gainNodeRef.current) {
+      gainNodeRef.current.disconnect()
+      gainNodeRef.current = null
     }
     if (currentUrlRef.current) {
       URL.revokeObjectURL(currentUrlRef.current)
@@ -76,51 +95,69 @@ export function useTTSPlayer(onQueueFinished?: () => void): UseTTSPlayerResult {
         return
       }
 
-      const mime = next.format === 'mp3' ? 'audio/mpeg' : 'audio/wav'
-      const blob = new Blob([next.audioBytes], { type: mime })
-      const url = URL.createObjectURL(blob)
-
-      if (!audioRef.current) {
-        audioRef.current = new Audio()
-      }
-      const audio = audioRef.current
-
-      if (currentUrlRef.current) {
-        URL.revokeObjectURL(currentUrlRef.current)
-        currentUrlRef.current = null
-      }
-
-      currentUrlRef.current = url
-      audio.src = url
       playingRef.current = true
       setPlaying(true)
 
-      void audio.play().catch(() => {
-        playingRef.current = false
-        setPlaying(false)
-        window.setTimeout(() => {
-          playNextRef.current()
-        }, 0)
-      })
+      decodeChainRef.current = decodeChainRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          let ctx = audioContextRef.current
+          if (!ctx) {
+            ctx = new AudioContext({ latencyHint: 'interactive' })
+            audioContextRef.current = ctx
+          }
+          if (ctx.state === 'suspended') {
+            await ctx.resume()
+          }
+
+          const decoded = await ctx.decodeAudioData(next.audioBytes.slice(0))
+          const source = ctx.createBufferSource()
+          source.buffer = decoded
+
+          const gain = ctx.createGain()
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+          gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + CROSSFADE_MS / 1000)
+
+          source.connect(gain)
+          gain.connect(ctx.destination)
+
+          source.onended = () => {
+            if (sourceNodeRef.current === source) {
+              sourceNodeRef.current = null
+            }
+            gain.disconnect()
+            window.setTimeout(() => {
+              playNextRef.current()
+            }, 0)
+          }
+
+          sourceNodeRef.current = source
+          gainNodeRef.current = gain
+          source.start()
+        })
+        .catch(() => {
+          playingRef.current = false
+          setPlaying(false)
+          window.setTimeout(() => {
+            playNextRef.current()
+          }, 0)
+        })
     }
 
     playNextRef.current = playNext
 
-    const audio = audioRef.current ?? new Audio()
-    audioRef.current = audio
-    const onEnded = () => {
-      playNextRef.current()
-    }
-    audio.addEventListener('ended', onEnded)
-
     return () => {
-      audio.removeEventListener('ended', onEnded)
+      // noop
     }
   }, [])
 
   useEffect(() => {
     return () => {
       clear()
+      if (audioContextRef.current) {
+        void audioContextRef.current.close()
+        audioContextRef.current = null
+      }
     }
   }, [clear])
 

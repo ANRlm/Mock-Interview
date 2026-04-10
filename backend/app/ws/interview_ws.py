@@ -28,14 +28,16 @@ logger = logging.getLogger(__name__)
 
 _TTS_END_MARKERS = {"。", "！", "？", "!", "?", ";", "；", "\n"}
 _TTS_SOFT_SPLIT_MARKERS = {"，", ",", "、", "：", ":", " "}
-_TTS_MIN_HARD_CHARS = 4
-_TTS_SOFT_SPLIT_TRIGGER_CHARS = 16
-_TTS_FORCE_SPLIT_CHARS = 30
-_TTS_FORCE_SPLIT_AT = 20
-_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 10
-_TTS_EARLY_FORCE_SPLIT_CHARS = 20
-_TTS_EARLY_FORCE_SPLIT_AT = 14
-_TTS_QUEUE_WAV_BYTES_THRESHOLD = 120_000
+_TTS_MIN_HARD_CHARS = 6
+_TTS_SOFT_SPLIT_TRIGGER_CHARS = 30
+_TTS_FORCE_SPLIT_CHARS = 64
+_TTS_FORCE_SPLIT_AT = 40
+_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 12
+_TTS_EARLY_FORCE_SPLIT_CHARS = 28
+_TTS_EARLY_FORCE_SPLIT_AT = 18
+_TTS_QUEUE_WAV_BYTES_THRESHOLD = 220_000
+_TTS_FIRST_PCM_FLUSH_BYTES = 8_000
+_TTS_PCM_FLUSH_BYTES = 20_000
 
 
 @dataclass
@@ -268,14 +270,28 @@ async def _handle_candidate_text(
             tts_input = tts_service.prepare_text_for_tts(sentence, fallback="")
             if tts_input:
                 try:
-                    async for pcm_chunk in tts_service.stream_synthesize(tts_input):
-                        if cancel_event.is_set():
-                            break
+                    pcm_buffer = bytearray()
+                    first_flush_sent = False
 
-                        wav_chunk = tts_service.pcm_chunk_to_wav(pcm_chunk)
+                    async def flush_buffer(force: bool = False) -> None:
+                        nonlocal first_flush_sent, tts_chunks, tts_bytes
+                        if not pcm_buffer:
+                            return
+                        threshold = (
+                            _TTS_FIRST_PCM_FLUSH_BYTES
+                            if not first_flush_sent
+                            else _TTS_PCM_FLUSH_BYTES
+                        )
+                        if not force and len(pcm_buffer) < threshold:
+                            return
+
+                        pcm_bytes = bytes(pcm_buffer)
+                        pcm_buffer.clear()
+                        wav_chunk = tts_service.pcm_chunk_to_wav(pcm_bytes)
                         if not wav_chunk:
-                            continue
+                            return
 
+                        first_flush_sent = True
                         tts_chunks += 1
                         tts_bytes += len(wav_chunk)
                         for playable_wav in _split_wav_for_playback(wav_chunk):
@@ -292,6 +308,14 @@ async def _handle_candidate_text(
                                     "response_id": response_id,
                                 }
                             )
+
+                    async for pcm_chunk in tts_service.stream_synthesize(tts_input):
+                        if cancel_event.is_set():
+                            break
+                        pcm_buffer.extend(pcm_chunk)
+                        await flush_buffer(force=False)
+
+                    await flush_buffer(force=True)
                 except Exception as exc:
                     logger.warning(
                         "TTS stream failed session=%s text_len=%s error=%s",
