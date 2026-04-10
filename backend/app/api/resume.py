@@ -83,6 +83,17 @@ def _merge_parsed_resume(
         summary = structured_summary
 
     return {
+        "name": _pick_text(structured.get("name"), parsed.get("name")),
+        "gender": _pick_text(structured.get("gender"), parsed.get("gender")),
+        "major": _pick_text(structured.get("major"), parsed.get("major")),
+        "education_level": _pick_text(
+            structured.get("education_level"),
+            parsed.get("education_level"),
+        ),
+        "self_introduction": _pick_text(
+            structured.get("self_introduction"),
+            parsed.get("self_introduction") or summary,
+        ),
         "summary": summary,
         "raw_summary": parsed_summary,
         "education": _pick_list(structured.get("education"), parsed.get("education")),
@@ -91,6 +102,11 @@ def _merge_parsed_resume(
             parsed.get("experience"),
         ),
         "projects": _pick_list(structured.get("projects"), parsed.get("projects")),
+        "awards": _pick_list(structured.get("awards"), parsed.get("awards")),
+        "target_position": _pick_text(
+            structured.get("target_position"),
+            parsed.get("target_position"),
+        ),
         "skills": _pick_list(structured.get("skills"), parsed.get("skills")),
     }
 
@@ -100,6 +116,13 @@ def _pick_list(primary: Any, fallback: Any) -> list[str]:
     if primary_list:
         return primary_list
     return _normalize_list(fallback)
+
+
+def _pick_text(primary: Any, fallback: Any) -> str:
+    primary_text = str(primary or "").strip()
+    if primary_text:
+        return primary_text
+    return str(fallback or "").strip()
 
 
 def _normalize_list(value: Any) -> list[str]:

@@ -21,7 +21,19 @@ export interface UploadResumeResponse {
 
 export interface ResumeParsePayload {
   status?: string
+  name?: string
+  gender?: string
+  major?: string
+  education_level?: string
+  self_introduction?: string
   summary?: string
+  education?: string[]
+  experience?: string[]
+  projects?: string[]
+  awards?: string[]
+  target_position?: string
+  skills?: string[]
+  raw_summary?: string
   filename?: string
   bytes?: number
 }
