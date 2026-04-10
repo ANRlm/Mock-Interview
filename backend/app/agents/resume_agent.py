@@ -22,6 +22,8 @@ _DEFAULT_PARSED_RESUME: dict[str, Any] = {
 
 
 class ResumeAgent(BaseAgent):
+    TASK_NAME = "resume"
+
     SYSTEM_PROMPT = (
         "将简历内容提炼为 JSON，字段包含 name、gender、major、education_level、"
         "self_introduction、summary、education、experience、projects、awards、"

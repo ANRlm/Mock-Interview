@@ -15,6 +15,7 @@ from app.services.llm_profile_service import LLMProfile, llm_profile_service
 
 class BaseAgent:
     SYSTEM_PROMPT = ""
+    TASK_NAME = "interview"
 
     def __init__(self) -> None:
         self._profile: LLMProfile | None = None
@@ -157,7 +158,11 @@ class BaseAgent:
 
     async def _ensure_runtime_client(self) -> None:
         async with AsyncSessionLocal() as db:
-            profile = await llm_profile_service.get_runtime_profile(db)
+            runtime_profile = await llm_profile_service.get_runtime_profile(db)
+
+        profile = llm_profile_service.resolve_task_profile(
+            runtime_profile, self.TASK_NAME
+        )
 
         if self._profile == profile and self.client is not None:
             return

@@ -36,6 +36,20 @@ def profile_to_dict(profile: LLMProfile) -> dict:
 
 
 class LLMProfileService:
+    _TASK_PROFILE_KEYS: dict[str, str] = {
+        "resume": "LLM_RESUME_PROFILE",
+        "interview": "LLM_INTERVIEW_PROFILE",
+        "evaluation": "LLM_EVALUATION_PROFILE",
+        "verifier": "LLM_VERIFIER_PROFILE",
+    }
+
+    _TASK_MODEL_KEYS: dict[str, str] = {
+        "resume": "LLM_RESUME_MODEL",
+        "interview": "LLM_INTERVIEW_MODEL",
+        "evaluation": "LLM_EVALUATION_MODEL",
+        "verifier": "LLM_VERIFIER_MODEL",
+    }
+
     def _base_profiles(self) -> dict[ProfileName, LLMProfile]:
         profiles: dict[ProfileName, LLMProfile] = {
             "local": LLMProfile(
@@ -102,6 +116,35 @@ class LLMProfileService:
             )
 
         return profile
+
+    def resolve_task_profile(
+        self, runtime_profile: LLMProfile, task: str
+    ) -> LLMProfile:
+        task_key = (task or "").strip().lower()
+        if not task_key:
+            return runtime_profile
+
+        task_profile_raw = str(
+            getattr(self._settings_obj(), self._TASK_PROFILE_KEYS.get(task_key, ""), "")
+        ).strip()
+        task_model_raw = str(
+            getattr(self._settings_obj(), self._TASK_MODEL_KEYS.get(task_key, ""), "")
+        ).strip()
+
+        profile = runtime_profile
+        if task_profile_raw in {"local", "cloud"}:
+            base_profiles = self._base_profiles()
+            candidate = base_profiles.get(task_profile_raw)
+            if candidate and candidate.enabled:
+                profile = candidate
+
+        if task_model_raw:
+            profile = replace(profile, model=task_model_raw)
+
+        return profile
+
+    def _settings_obj(self):
+        return settings
 
     async def list_profiles(self, db: AsyncSession) -> dict:
         config = await self.ensure_runtime_config(db)

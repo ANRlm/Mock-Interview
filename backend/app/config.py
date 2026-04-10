@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     LLM_DISABLE_THINKING: bool = True
     LLM_DEFAULT_PROFILE: str = "local"
 
+    LLM_RESUME_PROFILE: str = ""
+    LLM_RESUME_MODEL: str = ""
+    LLM_INTERVIEW_PROFILE: str = ""
+    LLM_INTERVIEW_MODEL: str = ""
+    LLM_EVALUATION_PROFILE: str = ""
+    LLM_EVALUATION_MODEL: str = ""
+    LLM_VERIFIER_PROFILE: str = ""
+    LLM_VERIFIER_MODEL: str = ""
+
     CLOUD_LLM_ENABLED: bool = False
     CLOUD_LLM_BASE_URL: str = ""
     CLOUD_LLM_API_KEY: str = ""

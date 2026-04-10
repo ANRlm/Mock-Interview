@@ -6,6 +6,8 @@ from .base_agent import BaseAgent
 
 
 class ScorerAgent(BaseAgent):
+    TASK_NAME = "evaluation"
+
     SYSTEM_PROMPT = """
 你是一位资深面试评估官。请基于完整对话记录给出结构化评分。
 返回 JSON，格式如下：

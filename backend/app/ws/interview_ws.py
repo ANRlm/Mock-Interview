@@ -16,6 +16,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.agents.interviewer_agent import InterviewerAgent
+from app.agents.verifier_agent import VerifierAgent
 from app.database import AsyncSessionLocal
 from app.models.message import ConversationMessage, MessageRole
 from app.models.session import InterviewSession
@@ -291,6 +292,7 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
     tts_worker_task = asyncio.create_task(_tts_worker())
     queued_sentence_count = 0
     pending_tts_buffer = ""
+    verifier = VerifierAgent()
 
     try:
         llm_start = time.perf_counter()
@@ -355,6 +357,14 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
         )
 
         llm_text = full_text.strip() or "请继续。"
+        try:
+            verified = await verifier.verify_question(llm_text)
+            if not verified.get("approved", True):
+                rewritten = str(verified.get("rewritten_question") or "").strip()
+                if rewritten:
+                    llm_text = rewritten
+        except Exception:
+            pass
         tail_sentence = pending_tts_buffer.strip()
         if tail_sentence:
             await tts_queue.put(tail_sentence)

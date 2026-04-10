@@ -11,6 +11,8 @@ from .base_agent import BaseAgent
 
 
 class InterviewerAgent(BaseAgent):
+    TASK_NAME = "interview"
+
     SYSTEM_PROMPT_TEMPLATE = """
 你是一位经验丰富的{job_role}领域面试官，名叫"Alex"。
 当前候选人信息：{resume_summary}
