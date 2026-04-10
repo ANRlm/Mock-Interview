@@ -180,9 +180,22 @@ class TTSService:
 
                         chunk_count = 0
                         first_chunk_at: float | None = None
+                        pending_byte = b""
                         async for chunk in response.aiter_bytes():
                             if not chunk:
                                 continue
+
+                            if pending_byte:
+                                chunk = pending_byte + chunk
+                                pending_byte = b""
+
+                            if len(chunk) % 2 != 0:
+                                pending_byte = chunk[-1:]
+                                chunk = chunk[:-1]
+
+                            if not chunk:
+                                continue
+
                             chunk_count += 1
                             yielded_any = True
                             if first_chunk_at is None:
@@ -193,6 +206,12 @@ class TTSService:
                                     first_chunk_at - stream_start,
                                 )
                             yield chunk
+
+                        if pending_byte:
+                            logger.warning(
+                                "CosyVoice stream ended with odd trailing byte; dropping for PCM alignment text_len=%s",
+                                len(sentence),
+                            )
 
                         if chunk_count == 0:
                             raise RuntimeError("CosyVoice stream returned no chunks")
@@ -266,6 +285,16 @@ class TTSService:
         return self._pcm_to_wav(pcm_bytes, settings.COSYVOICE_SAMPLE_RATE)
 
     def _pcm_to_wav(self, pcm_bytes: bytes, sample_rate: int) -> bytes:
+        if len(pcm_bytes) % 2 != 0:
+            logger.warning(
+                "PCM byte length is odd (%s), dropping trailing byte before WAV wrap",
+                len(pcm_bytes),
+            )
+            pcm_bytes = pcm_bytes[:-1]
+
+        if not pcm_bytes:
+            return b""
+
         output = BytesIO()
         with wave.open(output, "wb") as dst:
             dst.setnchannels(1)
