@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import io
 import json
 import logging
 import time
 import uuid
-import wave
 from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
@@ -17,6 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.agents.interviewer_agent import InterviewerAgent
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.message import ConversationMessage, MessageRole
 from app.models.session import InterviewSession
@@ -35,7 +34,6 @@ _TTS_FORCE_SPLIT_AT = 40
 _TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 12
 _TTS_EARLY_FORCE_SPLIT_CHARS = 28
 _TTS_EARLY_FORCE_SPLIT_AT = 18
-_TTS_QUEUE_WAV_BYTES_THRESHOLD = 220_000
 _TTS_FIRST_PCM_FLUSH_BYTES = 8_000
 _TTS_PCM_FLUSH_BYTES = 20_000
 
@@ -457,36 +455,7 @@ async def _handle_candidate_text(
 
 
 def _split_wav_for_playback(wav_bytes: bytes) -> list[bytes]:
-    if len(wav_bytes) <= _TTS_QUEUE_WAV_BYTES_THRESHOLD:
-        return [wav_bytes]
-
-    try:
-        with wave.open(io.BytesIO(wav_bytes), "rb") as src:
-            channels = src.getnchannels()
-            sample_width = src.getsampwidth()
-            sample_rate = src.getframerate()
-            frame_chunk = max(
-                1,
-                _TTS_QUEUE_WAV_BYTES_THRESHOLD // max(channels * sample_width, 1),
-            )
-
-            chunks: list[bytes] = []
-            while True:
-                frames = src.readframes(frame_chunk)
-                if not frames:
-                    break
-
-                out = io.BytesIO()
-                with wave.open(out, "wb") as dst:
-                    dst.setnchannels(channels)
-                    dst.setsampwidth(sample_width)
-                    dst.setframerate(sample_rate)
-                    dst.writeframes(frames)
-                chunks.append(out.getvalue())
-
-            return chunks or [wav_bytes]
-    except Exception:
-        return [wav_bytes]
+    return [wav_bytes]
 
 
 async def _handle_audio_turn(

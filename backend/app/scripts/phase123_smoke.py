@@ -101,6 +101,9 @@ async def _upload_resume(api_base: str, session_id: str) -> dict[str, Any]:
 async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
     ws_url = f"{ws_base}/interview/{session_id}"
     llm_tokens: list[str] = []
+    current_response_id = ""
+    tts_first_audio_seconds: float | None = None
+    llm_start_at: float | None = None
     tts_chunks = 0
     stt_partial = 0
     stt_final = ""
@@ -110,6 +113,7 @@ async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
     llm_stats: dict[str, Any] | None = None
 
     async with websockets.connect(ws_url, close_timeout=30.0) as ws:
+        llm_start_at = asyncio.get_running_loop().time()
         await ws.send(
             json.dumps(
                 {"type": "candidate_message", "text": "请先问我一个前端项目相关问题"}
@@ -127,16 +131,36 @@ async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
             msg_type = payload.get("type")
 
             if msg_type == "llm_token":
+                rid = str(payload.get("response_id") or "")
+                if rid and not current_response_id:
+                    current_response_id = rid
+                if rid and current_response_id and rid != current_response_id:
+                    continue
                 llm_tokens.append(str(payload.get("token") or ""))
             elif msg_type == "llm_done":
+                rid = str(payload.get("response_id") or "")
+                if rid and not current_response_id:
+                    current_response_id = rid
+                if rid and current_response_id and rid != current_response_id:
+                    continue
                 llm_done = True
             elif msg_type == "llm_stats":
                 llm_stats = payload
             elif msg_type == "tts_audio":
+                rid = str(payload.get("response_id") or "")
+                if rid and current_response_id and rid != current_response_id:
+                    continue
                 tts_chunks += 1
                 if tts_first_wav is None:
                     tts_first_wav = str(payload.get("data") or "")
+                    if llm_start_at is not None:
+                        tts_first_audio_seconds = (
+                            asyncio.get_running_loop().time() - llm_start_at
+                        )
             elif msg_type == "tts_done":
+                rid = str(payload.get("response_id") or "")
+                if rid and current_response_id and rid != current_response_id:
+                    continue
                 tts_done = True
             elif msg_type == "error":
                 raise RuntimeError(f"ws_error: {payload}")
@@ -187,6 +211,7 @@ async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
         "llm_done": llm_done,
         "llm_stats": llm_stats or {},
         "tts_chunks": tts_chunks,
+        "tts_first_audio_seconds": tts_first_audio_seconds,
         "tts_first_wav": tts_first_wav,
         "stt_partial_events": stt_partial,
         "stt_final": stt_final,
@@ -257,6 +282,7 @@ async def main() -> None:
         "llm_done": ws_result.get("llm_done"),
         "llm_stats": ws_result.get("llm_stats"),
         "tts_chunks": ws_result.get("tts_chunks"),
+        "tts_first_audio_seconds": ws_result.get("tts_first_audio_seconds"),
         "stt_partial_events": ws_result.get("stt_partial_events"),
         "stt_final": ws_result.get("stt_final"),
         "report_total_score": report.get("total_score"),
