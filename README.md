@@ -1,38 +1,38 @@
 # Mock Interview
 
-AI-driven mock interview system with real-time STT/LLM/TTS pipeline, resume parsing, and report scoring.
+本项目是一个本地可运行的 AI 模拟面试系统，支持实时语音面试链路（STT -> LLM -> TTS）、简历解析、面试报告生成，重点针对 WSL2 + NVIDIA GPU 场景做了稳定性与性能优化。
 
-## Key Features
+## 核心能力
 
-- Real-time interview over WebSocket (text + audio input)
-- STT via FunASR runtime (2-pass recognition)
-- LLM interviewer via Ollama (`qwen3.5:2b`, GPU)
-- TTS via CosyVoice2 (GPU path fixed for RTX 50-series)
-- Resume upload + parsing + role-aware questioning
-- Automated report generation (LLM + fluency + behavior score fusion)
-- End-to-end Phase1-3 smoke test script with artifact output
+- WebSocket 实时面试（文本与音频输入）
+- STT：FunASR 2-pass 语音识别
+- LLM：Ollama `qwen3.5:2b`（GPU 推理）
+- TTS：CosyVoice2（已适配 RTX 50 系列 CUDA 路径）
+- 简历上传与结构化解析
+- 面试报告生成（综合内容、流畅度、行为维度）
+- Phase1-3 自动冒烟验证脚本与产物输出
 
-## Architecture
+## 项目结构
 
-- `frontend/`: React + Vite + TypeScript
-- `backend/`: FastAPI + SQLAlchemy + agent/services
-- `docker-compose.gpu.yml`: WSL2 + NVIDIA GPU deployment (recommended)
-- `docker-compose.dev.yml`: CPU-oriented development compose
+- `frontend/`：React + Vite + TypeScript
+- `backend/`：FastAPI + SQLAlchemy + Agents/Services
+- `docker-compose.gpu.yml`：GPU 部署（推荐）
+- `docker-compose.dev.yml`：CPU 开发模式
 
-## Prerequisites
+## 环境要求
 
-- Windows + WSL2 Ubuntu
+- Windows + WSL2（Ubuntu）
 - Docker + Docker Compose
-- NVIDIA driver + NVIDIA Container Toolkit configured in WSL
+- NVIDIA 驱动 + WSL 内 NVIDIA Container Toolkit
 
-Validate GPU runtime:
+GPU 连通性检查：
 
 ```bash
 nvidia-smi
 docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
 ```
 
-## Quick Start (GPU, Recommended)
+## 快速启动（GPU 推荐）
 
 ```bash
 cd /home/cnhyk/Interview/mock-interview
@@ -40,73 +40,70 @@ docker compose -f docker-compose.gpu.yml up -d
 docker compose -f docker-compose.gpu.yml ps
 ```
 
-Endpoints:
+默认访问地址：
 
-- Frontend: `http://127.0.0.1:5173`
-- Backend health: `http://127.0.0.1:8000/healthz`
-- CosyVoice health: `http://127.0.0.1:50000/openapi.json`
-- Ollama API: `http://127.0.0.1:11434`
+- 前端：`http://127.0.0.1:5173`
+- 后端健康检查：`http://127.0.0.1:8000/healthz`
+- CosyVoice API：`http://127.0.0.1:50000/openapi.json`
+- Ollama API：`http://127.0.0.1:11434`
 
-## Verify Thinking Is Disabled
+## 验证 Thinking 已关闭
 
-The backend uses native Ollama `/api/chat` with `think=false`.
+后端通过 Ollama 原生 `/api/chat` 并显式传 `think=false`。
 
-Interactive check:
+可直接在容器中验证：
 
 ```bash
 docker exec -it mock-interview-ollama-1 ollama run qwen3.5:2b --think=false
 ```
 
-If configured correctly, no `Thinking...` block should appear.
+若配置正确，不应出现 `Thinking...` / `Thinking Process` 输出。
 
-## Phase1-3 Full Validation
+## Phase1-3 全链路验证
 
-Run smoke test (repeat 2-3 times for stability):
+建议连续运行 2~3 次：
 
 ```bash
 docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke --artifact-dir /tmp/phase123_run1
 docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke --artifact-dir /tmp/phase123_run2
 ```
 
-Each run should satisfy:
+每轮应满足：
 
 - `resume_status=uploaded`
 - `llm_done=true`
 - `tts_chunks > 0`
-- `stt_final` non-empty
-- `report_total_score` exists
+- `stt_final` 非空
+- `report_total_score` 存在
 
-Artifacts are saved as:
+产物文件：
 
 - `*_result.json`
 - `*_tts_first_chunk.wav`
 
-## Performance Notes
+## 性能与稳定性说明
 
-- LLM runs on GPU (`ollama ps` shows `PROCESSOR 100% GPU`)
-- Thinking is disabled for low latency and stable turn time
-- TTS CUDA path is enabled for RTX 5080 compatibility via updated torch/cu128 and ONNX runtime
+- LLM 运行于 GPU（`ollama ps` 可见 `PROCESSOR 100% GPU`）
+- Thinking 关闭后，首 token 与总耗时更稳定
+- CosyVoice CUDA 路径已适配 RTX 5080 场景
+- RAG embedding 支持本地路径 / HuggingFace 模型 ID / 兜底模型自动加载
 
-## Configuration
+## 关键配置
 
-Core backend envs are wired via `docker-compose.gpu.yml`:
+主要环境变量由 `docker-compose.gpu.yml` 注入：
 
-- `LLM_BASE_URL`, `LLM_MODEL`, `LLM_DISABLE_THINKING`
+- `LLM_BASE_URL`、`LLM_MODEL`、`LLM_DISABLE_THINKING`
 - `FUNASR_BASE_URL`
-- `COSYVOICE_BASE_URL`, `COSYVOICE_TTS_PATH`
-- `DATABASE_URL`, `CHROMA_DB_DIR`, `TTS_CACHE_DIR`
+- `COSYVOICE_BASE_URL`、`COSYVOICE_TTS_PATH`
+- `DATABASE_URL`、`CHROMA_DB_DIR`、`TTS_CACHE_DIR`
 
-Reference defaults: `backend/.env.example`
+默认值见 `backend/.env.example`。
 
-## Development Notes
+## 开发约定
 
-- Keep volumes between runs for faster startup (`down --remove-orphans`, avoid `-v` unless cold reset needed)
-- First cold start may be slow due to model downloads
-- RAG embedding model auto-load now supports:
-  - local path if present
-  - remote HF model from `EMBEDDING_MODEL`
-  - fallback to `BAAI/bge-small-zh-v1.5`
+- 提交规范见 `CONTRIBUTING.md`
+- 重大变更默认自动提交，并在提交信息中包含 `why / what / validation`
 
-## License
+## 许可证
 
-Internal/Private project (no public license declared yet).
+本项目采用 `MIT License`（见 `LICENSE`）。
