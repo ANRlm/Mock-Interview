@@ -3,7 +3,9 @@ import axios from 'axios'
 import type {
   CreateSessionPayload,
   GenerateReportResponse,
+  LLMProfilesResponse,
   ResumeParsePayload,
+  UpdateLLMRuntimePayload,
   UpdateSessionPayload,
   UploadResumeResponse,
 } from '@/types/api'
@@ -64,5 +66,15 @@ export async function uploadResume(sessionId: string, file: File): Promise<Uploa
 
 export async function getResume(sessionId: string): Promise<ResumeParsePayload> {
   const { data } = await api.get<ResumeParsePayload>(`/sessions/${sessionId}/resume`)
+  return data
+}
+
+export async function getLLMProfiles(): Promise<LLMProfilesResponse> {
+  const { data } = await api.get<LLMProfilesResponse>('/llm/profiles')
+  return data
+}
+
+export async function updateLLMRuntime(payload: UpdateLLMRuntimePayload): Promise<LLMProfilesResponse> {
+  const { data } = await api.put<LLMProfilesResponse>('/llm/runtime', payload)
   return data
 }

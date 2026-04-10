@@ -351,9 +351,7 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
             first_token_seconds=llm_first_token_latency,
             total_seconds=llm_total_elapsed,
             generated_chars=llm_token_chars,
-            backend="ollama-native"
-            if runtime.agent.using_ollama_native
-            else "openai-compatible",
+            backend=_resolve_llm_backend_label(runtime.agent),
         )
 
         llm_text = full_text.strip() or "请继续。"
@@ -541,6 +539,17 @@ def _build_llm_stats_payload(
     }
 
     return {key: value for key, value in payload.items() if value is not None}
+
+
+def _resolve_llm_backend_label(agent: InterviewerAgent) -> str:
+    if agent.using_ollama_native:
+        return "ollama-native"
+
+    profile_name = getattr(agent, "active_profile_name", "")
+    if profile_name == "cloud":
+        return "cloud-openai-compatible"
+
+    return "openai-compatible"
 
 
 def _drain_tts_ready_sentences(

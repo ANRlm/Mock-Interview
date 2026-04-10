@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "qwen3.5:2b"
     LLM_TIMEOUT_SECONDS: int = 90
     LLM_DISABLE_THINKING: bool = True
+    LLM_DEFAULT_PROFILE: str = "local"
+
+    CLOUD_LLM_ENABLED: bool = False
+    CLOUD_LLM_BASE_URL: str = ""
+    CLOUD_LLM_API_KEY: str = ""
+    CLOUD_LLM_MODEL: str = ""
+    CLOUD_LLM_TIMEOUT_SECONDS: int = 90
+    CLOUD_LLM_DISABLE_THINKING: bool = False
 
     STT_BACKEND: str = "funasr-http"
     FUNASR_BASE_URL: str = "http://127.0.0.1:10095"

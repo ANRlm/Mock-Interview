@@ -107,6 +107,13 @@ services:
       LLM_MODEL: qwen3.5:2b
       LLM_TIMEOUT_SECONDS: 90
       LLM_DISABLE_THINKING: "true"
+      LLM_DEFAULT_PROFILE: local
+      CLOUD_LLM_ENABLED: "false"
+      CLOUD_LLM_BASE_URL: ""
+      CLOUD_LLM_API_KEY: ""
+      CLOUD_LLM_MODEL: ""
+      CLOUD_LLM_TIMEOUT_SECONDS: 90
+      CLOUD_LLM_DISABLE_THINKING: "false"
       STT_BACKEND: funasr-http
       FUNASR_BASE_URL: http://funasr:10095
       FUNASR_HEALTH_PATH: /healthz

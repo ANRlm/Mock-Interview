@@ -9,24 +9,29 @@ import httpx
 from openai import AsyncOpenAI
 
 from app.config import settings
+from app.database import AsyncSessionLocal
+from app.services.llm_profile_service import LLMProfile, llm_profile_service
 
 
 class BaseAgent:
     SYSTEM_PROMPT = ""
 
     def __init__(self) -> None:
-        self.client = AsyncOpenAI(
-            base_url=settings.LLM_BASE_URL,
-            api_key=settings.LLM_API_KEY,
-            timeout=float(settings.LLM_TIMEOUT_SECONDS),
-        )
+        self._profile: LLMProfile | None = None
+        self.client: AsyncOpenAI | None = None
         self.model = settings.LLM_MODEL
-        self._use_ollama_native = self._is_local_ollama_base()
+        self._use_ollama_native = False
         self._last_stream_stats: dict[str, Any] = {}
 
     @property
     def using_ollama_native(self) -> bool:
         return self._use_ollama_native
+
+    @property
+    def active_profile_name(self) -> str:
+        if self._profile is None:
+            return "local"
+        return self._profile.name
 
     def pop_last_stream_stats(self) -> dict[str, Any]:
         stats = self._last_stream_stats
@@ -37,6 +42,7 @@ class BaseAgent:
         self, messages: list[dict[str, str]], stream: bool = True
     ) -> str | AsyncIterator[str]:
         self._last_stream_stats = {}
+        await self._ensure_runtime_client()
 
         if self._use_ollama_native:
             if stream:
@@ -47,6 +53,8 @@ class BaseAgent:
             return self._stream_chat(messages)
 
         extra_body = self._extra_body()
+        if self.client is None:
+            raise RuntimeError("LLM client not initialized")
         completion = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -65,6 +73,8 @@ class BaseAgent:
 
     async def _stream_chat(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
         extra_body = self._extra_body()
+        if self.client is None:
+            raise RuntimeError("LLM client not initialized")
         kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -109,10 +119,13 @@ class BaseAgent:
         self._last_stream_stats = stats
 
     async def chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
+        await self._ensure_runtime_client()
         if self._use_ollama_native:
             return await self._chat_json_ollama(messages)
 
         extra_body = self._extra_body()
+        if self.client is None:
+            raise RuntimeError("LLM client not initialized")
         completion = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -133,12 +146,38 @@ class BaseAgent:
         return json.loads(content)
 
     def _extra_body(self) -> dict[str, Any]:
-        if settings.LLM_DISABLE_THINKING:
+        if self._disable_thinking():
             return {"think": False}
         return {}
 
+    def _disable_thinking(self) -> bool:
+        if self._profile is not None:
+            return bool(self._profile.disable_thinking)
+        return bool(settings.LLM_DISABLE_THINKING)
+
+    async def _ensure_runtime_client(self) -> None:
+        async with AsyncSessionLocal() as db:
+            profile = await llm_profile_service.get_runtime_profile(db)
+
+        if self._profile == profile and self.client is not None:
+            return
+
+        self._profile = profile
+        self.model = profile.model
+        self.client = AsyncOpenAI(
+            base_url=profile.base_url,
+            api_key=profile.api_key,
+            timeout=float(profile.timeout_seconds),
+        )
+        self._use_ollama_native = self._is_local_ollama_base()
+
     def _is_local_ollama_base(self) -> bool:
-        parsed = urlparse(settings.LLM_BASE_URL)
+        base_url = (
+            self._profile.base_url
+            if self._profile is not None
+            else settings.LLM_BASE_URL
+        )
+        parsed = urlparse(base_url)
         host = (parsed.hostname or "").lower()
         if host not in {
             "localhost",
@@ -155,7 +194,12 @@ class BaseAgent:
         return port == 11434
 
     def _ollama_root_url(self) -> str:
-        base = settings.LLM_BASE_URL.rstrip("/")
+        base_url = (
+            self._profile.base_url
+            if self._profile is not None
+            else settings.LLM_BASE_URL
+        )
+        base = base_url.rstrip("/")
         if base.endswith("/v1"):
             return base[:-3]
         return base
@@ -166,11 +210,15 @@ class BaseAgent:
             "messages": messages,
             "stream": False,
         }
-        if settings.LLM_DISABLE_THINKING:
+        if self._disable_thinking():
             payload["think"] = False
 
         async with httpx.AsyncClient(
-            timeout=float(settings.LLM_TIMEOUT_SECONDS)
+            timeout=float(
+                self._profile.timeout_seconds
+                if self._profile
+                else settings.LLM_TIMEOUT_SECONDS
+            )
         ) as client:
             response = await client.post(
                 f"{self._ollama_root_url()}/api/chat", json=payload
@@ -191,11 +239,15 @@ class BaseAgent:
             "stream": False,
             "format": "json",
         }
-        if settings.LLM_DISABLE_THINKING:
+        if self._disable_thinking():
             payload["think"] = False
 
         async with httpx.AsyncClient(
-            timeout=float(settings.LLM_TIMEOUT_SECONDS)
+            timeout=float(
+                self._profile.timeout_seconds
+                if self._profile
+                else settings.LLM_TIMEOUT_SECONDS
+            )
         ) as client:
             response = await client.post(
                 f"{self._ollama_root_url()}/api/chat", json=payload
@@ -217,7 +269,7 @@ class BaseAgent:
             "messages": messages,
             "stream": True,
         }
-        if settings.LLM_DISABLE_THINKING:
+        if self._disable_thinking():
             payload["think"] = False
 
         done_stats: dict[str, Any] = {}

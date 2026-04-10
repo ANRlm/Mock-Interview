@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import type { JobRole } from '@/types/interview'
 
 import { ResumeUploader } from './ResumeUploader'
+import { LlmRuntimePanel } from './LlmRuntimePanel'
 
 const roleOptions: { role: JobRole; label: string; desc: string }[] = [
   { role: 'programmer', label: '程序员', desc: '算法、系统设计、项目深挖' },
@@ -82,6 +83,8 @@ export function SetupWizard() {
           </div>
         </CardContent>
       </Card>
+
+      <LlmRuntimePanel />
     </div>
   )
 }

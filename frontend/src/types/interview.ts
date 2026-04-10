@@ -45,7 +45,7 @@ export type InterviewStage = 'idle' | 'listening' | 'thinking' | 'speaking'
 export type TtsProvider = 'cosyvoice2-http' | 'unknown'
 
 export interface LlmTurnStats {
-  backend: 'ollama-native' | 'openai-compatible'
+  backend: 'ollama-native' | 'openai-compatible' | 'cloud-openai-compatible'
   generated_chars: number
   total_seconds: number
   first_token_seconds?: number

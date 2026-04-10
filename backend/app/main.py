@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.behavior import router as behavior_router
 from app.api.interview import router as interview_router
+from app.api.llm_config import router as llm_config_router
 from app.api.report import router as report_router
 from app.api.resume import router as resume_router
 from app.config import settings
@@ -42,4 +43,5 @@ app.include_router(interview_router, prefix=settings.API_V1_PREFIX)
 app.include_router(resume_router, prefix=settings.API_V1_PREFIX)
 app.include_router(report_router, prefix=settings.API_V1_PREFIX)
 app.include_router(behavior_router, prefix=settings.API_V1_PREFIX)
+app.include_router(llm_config_router, prefix=settings.API_V1_PREFIX)
 app.include_router(interview_ws_router, prefix="/ws")

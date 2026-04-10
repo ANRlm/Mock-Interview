@@ -1,4 +1,5 @@
 from .behavior_log import BehaviorLog
+from .llm_config import LLMRuntimeConfig
 from .message import ConversationMessage
 from .report import InterviewReport
 from .session import InterviewSession
@@ -8,4 +9,5 @@ __all__ = [
     "ConversationMessage",
     "BehaviorLog",
     "InterviewReport",
+    "LLMRuntimeConfig",
 ]
