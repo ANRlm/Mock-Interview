@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.venv/
+venv/
+
+uploads/
+chroma_db/
+mock_interview.db
+.env
+
+*.log
