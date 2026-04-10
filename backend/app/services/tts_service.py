@@ -42,6 +42,8 @@ class TTSService:
         )
         self._fixed_seed = int(settings.COSYVOICE_SEED)
         self._speed = float(settings.COSYVOICE_SPEED)
+        self._warm_lock = asyncio.Lock()
+        self._warmed_recently_until = 0.0
 
     async def ensure_ready(self) -> bool:
         if settings.TTS_BACKEND != TTS_PROVIDER_COSYVOICE2:
@@ -151,6 +153,7 @@ class TTSService:
             raise RuntimeError(f"Unsupported TTS backend: {settings.TTS_BACKEND}")
 
         sentence = text.strip() or "请继续。"
+        await self._warm_if_needed()
         cache_key = self._cache_key(sentence)
         wav_cache_path = self._cache_dir / f"{cache_key}.wav"
         if wav_cache_path.exists():
@@ -248,6 +251,39 @@ class TTSService:
                     raise RuntimeError("cosyvoice_stream_failed") from exc
 
                 await asyncio.sleep(0.2 * attempt)
+
+    async def _warm_if_needed(self) -> None:
+        now = time.perf_counter()
+        if now < self._warmed_recently_until:
+            return
+
+        async with self._warm_lock:
+            now = time.perf_counter()
+            if now < self._warmed_recently_until:
+                return
+
+            endpoint = f"{self._base_url}{self._tts_path}"
+            payload = {
+                "tts_text": "嗯。",
+                "spk_id": settings.COSYVOICE_VOICE,
+                "seed": self._fixed_seed,
+                "speed": self._speed,
+                **self._extra_payload,
+            }
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(8.0, connect=2.0)
+                ) as client:
+                    async with client.stream(
+                        "POST", endpoint, data=payload
+                    ) as response:
+                        if response.status_code < 400:
+                            async for chunk in response.aiter_bytes():
+                                if chunk:
+                                    break
+                self._warmed_recently_until = time.perf_counter() + 25.0
+            except Exception:
+                self._warmed_recently_until = time.perf_counter() + 5.0
 
     def _normalize_path(self, path: str) -> str:
         clean = (path or "").strip()
