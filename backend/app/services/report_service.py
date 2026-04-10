@@ -77,10 +77,28 @@ async def _generate_report(session_id: UUID) -> None:
             )
             behavior_logs = behavior_result.scalars().all()
             emotions = [item.emotion for item in behavior_logs]
+            emotion_confidences = [item.emotion_confidence for item in behavior_logs]
             eye_scores = [item.eye_contact_score for item in behavior_logs]
-            dominant_emotion, avg_eye_contact, behavior_score = (
-                vision_service.summarize(emotions, eye_scores)
+            head_pose_scores = [item.head_pose_score for item in behavior_logs]
+            gaze_x_values = [
+                item.gaze_x for item in behavior_logs if item.gaze_x is not None
+            ]
+            gaze_y_values = [
+                item.gaze_y for item in behavior_logs if item.gaze_y is not None
+            ]
+
+            behavior_summary = vision_service.summarize(
+                emotions=emotions,
+                emotion_confidences=emotion_confidences,
+                eye_scores=eye_scores,
+                head_pose_scores=head_pose_scores,
+                gaze_x_values=gaze_x_values,
+                gaze_y_values=gaze_y_values,
             )
+
+            dominant_emotion = behavior_summary.dominant_emotion
+            avg_eye_contact = behavior_summary.avg_eye_contact
+            behavior_score = behavior_summary.behavior_score
 
             total_score = round(
                 (
@@ -119,6 +137,12 @@ async def _generate_report(session_id: UUID) -> None:
                     behavior_detail={
                         "sample_count": len(behavior_logs),
                         "emotion_distribution": _emotion_distribution(emotions),
+                        "attention_score": behavior_summary.attention_score,
+                        "posture_score": behavior_summary.posture_score,
+                        "engagement_score": behavior_summary.engagement_score,
+                        "gaze_stability": behavior_summary.gaze_stability,
+                        "emotion_confidence": behavior_summary.emotion_confidence,
+                        "recommendations": behavior_summary.recommendations,
                     },
                     total_score=total_score,
                     generated_at=datetime.now(timezone.utc),
@@ -147,6 +171,12 @@ async def _generate_report(session_id: UUID) -> None:
                 report.behavior_detail = {
                     "sample_count": len(behavior_logs),
                     "emotion_distribution": _emotion_distribution(emotions),
+                    "attention_score": behavior_summary.attention_score,
+                    "posture_score": behavior_summary.posture_score,
+                    "engagement_score": behavior_summary.engagement_score,
+                    "gaze_stability": behavior_summary.gaze_stability,
+                    "emotion_confidence": behavior_summary.emotion_confidence,
+                    "recommendations": behavior_summary.recommendations,
                 }
                 report.total_score = total_score
                 report.generated_at = datetime.now(timezone.utc)

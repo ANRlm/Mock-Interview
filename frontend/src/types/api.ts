@@ -72,3 +72,16 @@ export interface UpdateLLMRuntimePayload {
   model?: string | null
   disable_thinking?: boolean | null
 }
+
+export interface BehaviorFrameInput {
+  frame_second: number
+  eye_contact_score: number
+  head_pose_score: number
+  gaze_x?: number | null
+  gaze_y?: number | null
+  image_base64?: string | null
+}
+
+export interface BehaviorBatchPayload {
+  frames: BehaviorFrameInput[]
+}

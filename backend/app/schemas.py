@@ -80,6 +80,7 @@ class ReportRead(BaseModel):
     total_score: float
     strengths: list[str]
     improvements: list[str]
+    behavior_detail: dict | None = None
     generated_at: datetime
 
     model_config = {"from_attributes": True}

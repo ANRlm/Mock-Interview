@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { useAudioRecorder } from '@/hooks/useAudioRecorder'
+import { useMediaPipe } from '@/hooks/useMediaPipe'
 import { useTTSPlayer } from '@/hooks/useTTSPlayer'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { getMessages, updateSession } from '@/services/api'
+import { getMessages, postBehavior, updateSession } from '@/services/api'
 import { useInterviewStore } from '@/stores/interviewStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import type { ConversationMessage, TtsProvider, WsServerMessage } from '@/types/interview'
@@ -151,6 +152,8 @@ export function InterviewRoom() {
     onMessage: handleSocketMessage,
   })
 
+  const mediaPipe = useMediaPipe()
+
   const interruptPlayback = useCallback(
     (reason = 'barge_in') => {
       clearTtsQueue()
@@ -187,6 +190,47 @@ export function InterviewRoom() {
       .then((history) => setMessages(history))
       .catch(() => undefined)
   }, [sessionId, setMessages])
+
+  useEffect(() => {
+    if (!sessionId) {
+      mediaPipe.stop()
+      return
+    }
+
+    let disposed = false
+    mediaPipe.start().catch(() => undefined)
+
+    const timer = window.setInterval(() => {
+      if (disposed || !sessionId) {
+        return
+      }
+
+      const frameSecond = Math.floor(Date.now() / 1000)
+      const sample = mediaPipe.captureFrame(frameSecond)
+      if (!sample) {
+        return
+      }
+
+      void postBehavior(sessionId, {
+        frames: [
+          {
+            frame_second: sample.frameSecond,
+            eye_contact_score: sample.eyeContactScore,
+            head_pose_score: sample.headPoseScore,
+            gaze_x: sample.gazeX,
+            gaze_y: sample.gazeY,
+            image_base64: sample.imageBase64,
+          },
+        ],
+      }).catch(() => undefined)
+    }, 5000)
+
+    return () => {
+      disposed = true
+      window.clearInterval(timer)
+      mediaPipe.stop()
+    }
+  }, [mediaPipe, sessionId])
 
   useEffect(() => {
     if (!recorderEnabled) {
@@ -295,7 +339,13 @@ export function InterviewRoom() {
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_1.35fr_0.9fr]">
         <div className="space-y-4">
-          <VideoPanel />
+          <VideoPanel
+            ready={mediaPipe.ready}
+            eyeContactScore={mediaPipe.eyeContactScore}
+            headPoseScore={mediaPipe.headPoseScore}
+            expression={mediaPipe.expression}
+            warning={mediaPipe.warning}
+          />
           <AudioVisualizer level={micLevel} active={isRecording} />
         </div>
 

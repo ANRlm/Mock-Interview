@@ -37,6 +37,16 @@ export interface InterviewReport {
   total_score: number
   strengths: string[]
   improvements: string[]
+  behavior_detail?: {
+    sample_count?: number
+    emotion_distribution?: Record<string, number>
+    attention_score?: number
+    posture_score?: number
+    engagement_score?: number
+    gaze_stability?: number
+    emotion_confidence?: number
+    recommendations?: string[]
+  }
   generated_at: string
 }
 

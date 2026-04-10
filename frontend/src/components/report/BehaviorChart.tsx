@@ -2,22 +2,61 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface BehaviorChartProps {
   behaviorScore: number
+  behaviorDetail?: {
+    sample_count?: number
+    attention_score?: number
+    posture_score?: number
+    engagement_score?: number
+    gaze_stability?: number
+    recommendations?: string[]
+  }
 }
 
-export function BehaviorChart({ behaviorScore }: BehaviorChartProps) {
+const display = (value?: number) => (typeof value === 'number' ? `${Math.round(value)}%` : '-')
+
+export function BehaviorChart({ behaviorScore, behaviorDetail }: BehaviorChartProps) {
   const normalized = Math.max(0, Math.min(100, behaviorScore))
+  const recommendations = behaviorDetail?.recommendations ?? []
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-sm text-slate-300">行为表现概览</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-800">
           <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700" style={{ width: `${normalized}%` }} />
         </div>
-        <p className="mt-3 text-xs text-slate-500">基于眼神接触与姿态稳定性（Phase 1 为预留值）</p>
+
+        <div className="grid gap-2 md:grid-cols-4">
+          <Metric title="注意力" value={display(behaviorDetail?.attention_score)} />
+          <Metric title="姿态稳定" value={display(behaviorDetail?.posture_score)} />
+          <Metric title="互动投入" value={display(behaviorDetail?.engagement_score)} />
+          <Metric title="视线稳定" value={display(behaviorDetail?.gaze_stability)} />
+        </div>
+
+        <p className="text-xs text-slate-500">采样帧数：{behaviorDetail?.sample_count ?? 0}</p>
+
+        {recommendations.length > 0 ? (
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-widest text-cyan-300">行为改进建议</p>
+            <ul className="space-y-1 text-xs text-slate-300">
+              {recommendations.map((item, idx) => (
+                <li key={idx}>- {item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
+  )
+}
+
+function Metric({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-800 bg-slate-950/70 p-2">
+      <p className="text-[11px] text-slate-400">{title}</p>
+      <p className="text-sm font-semibold text-slate-100">{value}</p>
+    </div>
   )
 }

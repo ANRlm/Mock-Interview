@@ -105,7 +105,7 @@ export function ReportPageView({ sessionId }: ReportPageViewProps) {
         <ScoreCard title="逻辑思维" value={currentReport.llm_logic_score} caption="分析路径与论证一致性" />
       </div>
 
-      <BehaviorChart behaviorScore={currentReport.behavior_score} />
+      <BehaviorChart behaviorScore={currentReport.behavior_score} behaviorDetail={currentReport.behavior_detail} />
 
       <Card>
         <CardHeader>

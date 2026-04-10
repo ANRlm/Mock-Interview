@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 import type {
+  BehaviorBatchPayload,
   CreateSessionPayload,
   GenerateReportResponse,
   LLMProfilesResponse,
@@ -76,5 +77,10 @@ export async function getLLMProfiles(): Promise<LLMProfilesResponse> {
 
 export async function updateLLMRuntime(payload: UpdateLLMRuntimePayload): Promise<LLMProfilesResponse> {
   const { data } = await api.put<LLMProfilesResponse>('/llm/runtime', payload)
+  return data
+}
+
+export async function postBehavior(sessionId: string, payload: BehaviorBatchPayload): Promise<{ status: string }> {
+  const { data } = await api.post<{ status: string }>(`/sessions/${sessionId}/behavior`, payload)
   return data
 }
