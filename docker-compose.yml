@@ -1,0 +1,141 @@
+services:
+  funasr:
+    image: registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.12
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        set -e
+        decoder_thread_num="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || echo 4)"
+        if [ -z "$$decoder_thread_num" ] || [ "$$decoder_thread_num" -lt 1 ]; then
+          decoder_thread_num=4
+        fi
+        multiple_io=16
+        io_thread_num=$(( (decoder_thread_num + multiple_io - 1) / multiple_io ))
+        /workspace/FunASR/runtime/websocket/build/bin/funasr-wss-server-2pass \
+          --download-model-dir /workspace/models \
+          --model-dir damo/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-onnx \
+          --online-model-dir damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx \
+          --vad-dir damo/speech_fsmn_vad_zh-cn-16k-common-onnx \
+          --punc-dir damo/punc_ct-transformer_zh-cn-common-vad_realtime-vocab272727-onnx \
+          --itn-dir thuduj12/fst_itn_zh \
+          --lm-dir damo/speech_ngram_lm_zh-cn-ai-wesp-fst \
+          --decoder-thread-num "$$decoder_thread_num" \
+          --model-thread-num 1 \
+          --io-thread-num "$$io_thread_num" \
+          --port 10095 \
+          --hotword /workspace/FunASR/runtime/websocket/hotwords.txt
+    ports:
+      - '10095:10095'
+
+  cosyvoice2:
+    image: python:3.10-slim
+    working_dir: /opt
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        set -e
+        apt-get update
+        apt-get install -y --no-install-recommends git ffmpeg sox libsox-dev build-essential
+        rm -rf /var/lib/apt/lists/*
+        pip install --no-cache-dir modelscope
+        pip install --no-cache-dir --upgrade pip wheel "setuptools<81"
+
+        if [ ! -d CosyVoice ]; then
+          git clone --depth=1 --recursive https://github.com/FunAudioLLM/CosyVoice.git
+        fi
+
+        cd CosyVoice
+        python - <<'PY'
+        from pathlib import Path
+
+        path = Path("requirements.txt")
+        lines = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("deepspeed=="):
+                continue
+            if line.startswith("tensorrt-cu12"):
+                continue
+            if line.startswith("onnxruntime-gpu==1.18.0;"):
+                line = "onnxruntime>=1.18.0; sys_platform == 'linux'"
+            if line.startswith("openai-whisper=="):
+                continue
+            lines.append(line)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        PY
+
+        pip install --no-cache-dir -r requirements.txt
+        pip install --no-cache-dir "setuptools<81"
+        pip install --no-cache-dir --no-build-isolation openai-whisper==20231117
+
+        python - <<'PY'
+        import gc
+        import sys
+        from pathlib import Path
+
+        repo_dir = Path.cwd()
+        sys.path.append(str(repo_dir / "third_party/Matcha-TTS"))
+
+        from cosyvoice.cli.cosyvoice import AutoModel
+
+        spk_id = "default_zh"
+        prompt_wav = str(repo_dir / "asset/zero_shot_prompt.wav")
+        model = AutoModel(model_dir="iic/CosyVoice2-0.5B")
+        current = model.frontend.spk2info.get(spk_id, {})
+        if not isinstance(current, dict):
+            current = {}
+        if "embedding" not in current:
+            current["embedding"] = model.frontend._extract_spk_embedding(prompt_wav)
+            model.frontend.spk2info[spk_id] = current
+            model.save_spkinfo()
+        del model
+        gc.collect()
+        PY
+
+        python runtime/python/fastapi/server.py --port 50000 --model_dir iic/CosyVoice2-0.5B
+    ports:
+      - '50000:50000'
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: interview
+      POSTGRES_USER: interview
+      POSTGRES_PASSWORD: interview
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://interview:interview@db:5432/interview
+      FUNASR_BASE_URL: http://funasr:10095
+      COSYVOICE_BASE_URL: http://cosyvoice2:50000
+      COSYVOICE_HEALTH_PATH: /openapi.json
+      COSYVOICE_VOICE: default_zh
+    depends_on:
+      - db
+      - funasr
+      - cosyvoice2
+    ports:
+      - '8000:8000'
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run build && npm run preview -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - backend
+    ports:
+      - '5173:5173'
+
+volumes:
+  postgres_data:

@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.agents.resume_agent import ResumeAgent
+from app.config import settings
+from app.database import get_db
+from app.models.session import InterviewSession
+from app.services.resume_service import (
+    parse_resume,
+    parse_resume_text,
+    read_resume_text,
+)
+
+router = APIRouter(prefix="/sessions", tags=["resume"])
+
+_DEFAULT_SUMMARY = "简历已上传，暂未解析。"
+
+
+@router.post("/{session_id}/resume", status_code=status.HTTP_202_ACCEPTED)
+async def upload_resume(
+    session_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    session = await db.get(InterviewSession, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    suffix = Path(file.filename or "resume.pdf").suffix.lower()
+    if suffix not in {".pdf", ".txt", ".md"}:
+        raise HTTPException(status_code=400, detail="Unsupported resume file type")
+
+    target_dir = Path(settings.UPLOAD_DIR) / str(session_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / f"resume{suffix}"
+
+    content = await file.read()
+    target_path.write_bytes(content)
+
+    session.resume_path = str(target_path)
+    resume_text = read_resume_text(str(target_path))
+
+    if resume_text.strip():
+        parsed = parse_resume_text(resume_text)
+        llm_structured = await ResumeAgent().structure_resume(resume_text)
+        parsed = _merge_parsed_resume(parsed, llm_structured)
+    else:
+        parsed = parse_resume(str(target_path))
+
+    session.resume_parsed = {
+        **parsed,
+        "filename": file.filename,
+        "bytes": len(content),
+    }
+    await db.commit()
+
+    return {"status": "uploaded", "path": str(target_path)}
+
+
+@router.get("/{session_id}/resume")
+async def get_resume(session_id: UUID, db: AsyncSession = Depends(get_db)) -> dict:
+    session = await db.get(InterviewSession, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.resume_parsed or {"status": "empty"}
+
+
+def _merge_parsed_resume(
+    parsed: dict[str, Any],
+    structured: dict[str, Any],
+) -> dict[str, Any]:
+    parsed_summary = str(parsed.get("summary") or "").strip()
+    structured_summary = str(structured.get("summary") or "").strip()
+
+    summary = parsed_summary or _DEFAULT_SUMMARY
+    if structured_summary and structured_summary != _DEFAULT_SUMMARY:
+        summary = structured_summary
+
+    return {
+        "summary": summary,
+        "raw_summary": parsed_summary,
+        "education": _pick_list(structured.get("education"), parsed.get("education")),
+        "experience": _pick_list(
+            structured.get("experience"),
+            parsed.get("experience"),
+        ),
+        "projects": _pick_list(structured.get("projects"), parsed.get("projects")),
+        "skills": _pick_list(structured.get("skills"), parsed.get("skills")),
+    }
+
+
+def _pick_list(primary: Any, fallback: Any) -> list[str]:
+    primary_list = _normalize_list(primary)
+    if primary_list:
+        return primary_list
+    return _normalize_list(fallback)
+
+
+def _normalize_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+
+    items: list[Any]
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, str):
+        items = [value]
+    else:
+        return []
+
+    output: list[str] = []
+    for item in items:
+        text = str(item).strip()
+        if text and text not in output:
+            output.append(text)
+    return output[:8]
