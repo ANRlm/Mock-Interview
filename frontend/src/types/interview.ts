@@ -72,12 +72,12 @@ export interface LlmTurnStats {
 export type WsServerMessage =
   | { type: 'stt_partial'; text: string }
   | { type: 'stt_final'; text: string }
-  | { type: 'llm_token'; token: string }
-  | { type: 'llm_done'; full_text: string; turn_index: number }
+  | { type: 'llm_token'; token: string; response_id?: string }
+  | { type: 'llm_done'; full_text: string; turn_index: number; response_id?: string }
   | ({ type: 'llm_stats' } & LlmTurnStats)
-  | { type: 'tts_audio'; data: string; format: 'wav' | 'mp3'; provider?: TtsProvider }
+  | { type: 'tts_audio'; data: string; format: 'wav' | 'mp3'; provider?: TtsProvider; response_id?: string }
   | { type: 'tts_interrupted'; reason: string }
-  | { type: 'tts_done' }
+  | { type: 'tts_done'; response_id?: string }
   | { type: 'interview_end'; reason: string }
   | { type: 'error'; code: string; message: string }
   | { type: 'pong' }

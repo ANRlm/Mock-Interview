@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     COSYVOICE_VOICE: str = "default_zh"
     COSYVOICE_SAMPLE_RATE: int = 22050
     COSYVOICE_EXTRA_PAYLOAD: str = "{}"
+    COSYVOICE_SPEED: float = 1.12
+    COSYVOICE_SEED: int = 3407
 
     TTS_CACHE_DIR: str = "./uploads/tts_cache"
 

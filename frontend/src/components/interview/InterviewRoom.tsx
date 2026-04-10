@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Mic, MicOff, Send } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
@@ -28,6 +28,7 @@ export function InterviewRoom() {
   const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [micDenied, setMicDenied] = useState(false)
+  const currentResponseIdRef = useRef<string>('')
 
   const { selectedRole, subRole } = useSettingsStore()
   const {
@@ -79,6 +80,7 @@ export function InterviewRoom() {
         const candidateText = payload.text.trim()
         setSttPreview(payload.text)
         if (candidateText) {
+          currentResponseIdRef.current = ''
           setLlmStats(null)
           const nextTurn = messages.filter((msg) => msg.role === 'candidate').length + 1
           addMessage(
@@ -94,11 +96,22 @@ export function InterviewRoom() {
         return
       }
       case 'llm_token': {
+        if (payload.response_id) {
+          if (!currentResponseIdRef.current) {
+            currentResponseIdRef.current = payload.response_id
+          }
+          if (payload.response_id !== currentResponseIdRef.current) {
+            return
+          }
+        }
         setStage('speaking')
         appendStreamToken(payload.token)
         return
       }
       case 'llm_done': {
+        if (payload.response_id && payload.response_id !== currentResponseIdRef.current) {
+          return
+        }
         addMessage(
           localMessage({
             session_id: session.id,
@@ -115,6 +128,9 @@ export function InterviewRoom() {
         return
       }
       case 'tts_audio': {
+        if (payload.response_id && payload.response_id !== currentResponseIdRef.current) {
+          return
+        }
         const provider = payload.provider ?? 'unknown'
         setTtsProvider(provider)
         setTtsProviderLabel(resolveProviderLabel(provider))
@@ -122,6 +138,9 @@ export function InterviewRoom() {
         return
       }
       case 'tts_done': {
+        if (payload.response_id && payload.response_id !== currentResponseIdRef.current) {
+          return
+        }
         if (!ttsPlaying && ttsQueueSize === 0) {
           setStage('listening')
         }
@@ -129,6 +148,7 @@ export function InterviewRoom() {
       }
       case 'tts_interrupted': {
         clearTtsQueue()
+        currentResponseIdRef.current = ''
         setStage('listening')
         setTtsProviderLabel('已打断')
         return
@@ -157,6 +177,7 @@ export function InterviewRoom() {
   const interruptPlayback = useCallback(
     (reason = 'barge_in') => {
       clearTtsQueue()
+      currentResponseIdRef.current = ''
       setTtsProviderLabel('已打断')
       setStage('listening')
       sendInterrupt(reason)
@@ -256,6 +277,7 @@ export function InterviewRoom() {
     const nextTurn = turnCount + 1
 
     setLlmStats(null)
+    currentResponseIdRef.current = ''
 
     if (stage === 'speaking' || stage === 'thinking') {
       interruptPlayback('text_override')
@@ -282,6 +304,7 @@ export function InterviewRoom() {
 
     stop()
     clearTtsQueue()
+    currentResponseIdRef.current = ''
     const updated = await updateSession(session.id, { status: 'completed' })
     setSession(updated)
     navigate(`/report/${session.id}`)

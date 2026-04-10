@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import time
+import uuid
 import wave
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -16,7 +17,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.agents.interviewer_agent import InterviewerAgent
-from app.agents.verifier_agent import VerifierAgent
 from app.database import AsyncSessionLocal
 from app.models.message import ConversationMessage, MessageRole
 from app.models.session import InterviewSession
@@ -48,6 +48,7 @@ class SessionRuntime:
     sample_rate: int = 16000
     response_task: asyncio.Task[None] | None = None
     response_cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
+    active_response_id: str = ""
     closed: bool = False
 
     async def send_json(self, payload: dict[str, Any]) -> None:
@@ -68,11 +69,16 @@ class SessionRuntime:
 
         self.response_task = None
         self.response_cancel_event = asyncio.Event()
+        self.active_response_id = ""
 
     async def start_response(self, text: str) -> None:
         if self.response_task and not self.response_task.done():
             await self.cancel_response("superseded")
-        self.response_task = asyncio.create_task(_handle_candidate_text(self, text))
+        response_id = uuid.uuid4().hex
+        self.active_response_id = response_id
+        self.response_task = asyncio.create_task(
+            _handle_candidate_text(self, text, response_id)
+        )
 
     async def start_audio_turn(self, pcm_bytes: bytes, sample_rate: int) -> None:
         if self.response_task and not self.response_task.done():
@@ -190,7 +196,11 @@ async def interview_socket(websocket: WebSocket, session_id: UUID) -> None:
             await websocket.close(code=1011)
 
 
-async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
+async def _handle_candidate_text(
+    runtime: SessionRuntime,
+    text: str,
+    response_id: str,
+) -> None:
     session_id = runtime.session_id
     cancel_event = runtime.response_cancel_event
 
@@ -269,6 +279,8 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
                         tts_chunks += 1
                         tts_bytes += len(wav_chunk)
                         for playable_wav in _split_wav_for_playback(wav_chunk):
+                            if runtime.active_response_id != response_id:
+                                break
                             await runtime.send_json(
                                 {
                                     "type": "tts_audio",
@@ -277,6 +289,7 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
                                     ),
                                     "format": "wav",
                                     "provider": "cosyvoice2-http",
+                                    "response_id": response_id,
                                 }
                             )
                 except Exception as exc:
@@ -292,7 +305,7 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
     tts_worker_task = asyncio.create_task(_tts_worker())
     queued_sentence_count = 0
     pending_tts_buffer = ""
-    verifier = VerifierAgent()
+    verifier = None
 
     try:
         llm_start = time.perf_counter()
@@ -313,7 +326,9 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
                     first_llm_token_at = time.perf_counter()
                 llm_token_chars += len(token)
                 full_text += token
-                await runtime.send_json({"type": "llm_token", "token": token})
+                await runtime.send_json(
+                    {"type": "llm_token", "token": token, "response_id": response_id}
+                )
 
                 pending_tts_buffer += token
                 ready_sentences, pending_tts_buffer = _drain_tts_ready_sentences(
@@ -330,7 +345,13 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
             if not full_text.strip() and not cancel_event.is_set():
                 full_text = "请继续。"
                 llm_token_chars = len(full_text)
-                await runtime.send_json({"type": "llm_token", "token": full_text})
+                await runtime.send_json(
+                    {
+                        "type": "llm_token",
+                        "token": full_text,
+                        "response_id": response_id,
+                    }
+                )
                 pending_tts_buffer += full_text
                 ready_sentences, pending_tts_buffer = _drain_tts_ready_sentences(
                     pending_tts_buffer,
@@ -357,14 +378,8 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
         )
 
         llm_text = full_text.strip() or "请继续。"
-        try:
-            verified = await verifier.verify_question(llm_text)
-            if not verified.get("approved", True):
-                rewritten = str(verified.get("rewritten_question") or "").strip()
-                if rewritten:
-                    llm_text = rewritten
-        except Exception:
-            pass
+        if runtime.active_response_id != response_id:
+            return
         tail_sentence = pending_tts_buffer.strip()
         if tail_sentence:
             await tts_queue.put(tail_sentence)
@@ -384,7 +399,12 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
             await db.commit()
 
         await runtime.send_json(
-            {"type": "llm_done", "full_text": llm_text, "turn_index": turn_index}
+            {
+                "type": "llm_done",
+                "full_text": llm_text,
+                "turn_index": turn_index,
+                "response_id": response_id,
+            }
         )
         await runtime.send_json({"type": "llm_stats", **llm_stats_payload})
 
@@ -400,8 +420,8 @@ async def _handle_candidate_text(runtime: SessionRuntime, text: str) -> None:
             time.perf_counter() - tts_start,
         )
 
-        if not cancel_event.is_set():
-            await runtime.send_json({"type": "tts_done"})
+        if not cancel_event.is_set() and runtime.active_response_id == response_id:
+            await runtime.send_json({"type": "tts_done", "response_id": response_id})
     except asyncio.CancelledError:
         raise
     finally:

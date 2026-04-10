@@ -40,6 +40,8 @@ class TTSService:
         self._extra_payload = self._parse_extra_payload(
             settings.COSYVOICE_EXTRA_PAYLOAD
         )
+        self._fixed_seed = int(settings.COSYVOICE_SEED)
+        self._speed = float(settings.COSYVOICE_SPEED)
 
     async def ensure_ready(self) -> bool:
         if settings.TTS_BACKEND != TTS_PROVIDER_COSYVOICE2:
@@ -50,6 +52,8 @@ class TTSService:
         probe_payload = {
             "tts_text": "你好。",
             "spk_id": settings.COSYVOICE_VOICE,
+            "seed": self._fixed_seed,
+            "speed": self._speed,
             **self._extra_payload,
         }
 
@@ -158,6 +162,8 @@ class TTSService:
         payload = {
             "tts_text": sentence,
             "spk_id": settings.COSYVOICE_VOICE,
+            "seed": self._fixed_seed,
+            "speed": self._speed,
             **self._extra_payload,
         }
 
@@ -269,7 +275,8 @@ class TTSService:
         raw = (
             f"{settings.TTS_BACKEND}|{settings.COSYVOICE_BASE_URL}|"
             f"{settings.COSYVOICE_TTS_PATH}|{settings.COSYVOICE_VOICE}|"
-            f"{settings.COSYVOICE_SAMPLE_RATE}|{text}"
+            f"{settings.COSYVOICE_SAMPLE_RATE}|{settings.COSYVOICE_SPEED}|"
+            f"{settings.COSYVOICE_SEED}|{text}"
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
