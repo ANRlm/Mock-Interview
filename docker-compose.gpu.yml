@@ -109,24 +109,24 @@ services:
         max_retries=5
         retry_delay=30
         model="qwen3.5:2b"
-        for attempt in $(seq 1 $max_retries); do
-          echo "Pulling model $model (attempt $attempt/$max_retries)..."
+        for attempt in $(seq 1 $${max_retries}); do
+          echo "Pulling model $$model (attempt $$attempt/$$max_retries)..."
           result=$(curl -fsS -X POST http://ollama:11434/api/pull \
             -H "Content-Type: application/json" \
-            -d "{\"model\":\"$model\",\"stream\":false}" \
+            -d "{\"model\":\"$$model\",\"stream\":false}" \
             2>&1)
-          if [ $? -eq 0 ]; then
-            echo "Model $model pulled successfully."
-            echo "$result"
+          if [ $$? -eq 0 ]; then
+            echo "Model $$model pulled successfully."
+            echo "$$result"
             exit 0
           fi
-          echo "Attempt $attempt failed: $result"
-          if [ $attempt -lt $max_retries ]; then
-            echo "Retrying in ${retry_delay}s..."
-            sleep $retry_delay
+          echo "Attempt $$attempt failed: $$result"
+          if [ $$attempt -lt $${max_retries} ]; then
+            echo "Retrying in $${retry_delay}s..."
+            sleep $${retry_delay}
           fi
         done
-        echo "Failed to pull model $model after $max_retries attempts."
+        echo "Failed to pull model $$model after $${max_retries} attempts."
         exit 1
     depends_on:
       ollama:
