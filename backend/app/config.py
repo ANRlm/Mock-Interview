@@ -53,16 +53,34 @@ class Settings(BaseSettings):
     COSYVOICE_HEALTH_PATH: str = "/openapi.json"
     COSYVOICE_TIMEOUT_SECONDS: int = 25
     COSYVOICE_VOICE: str = "default_zh"
+    COSYVOICE_MODE: str = "sft"
+    COSYVOICE_INSTRUCT_TEXT: str = (
+        "用甜美、温柔、自然、清晰的中文女声播报，语气亲切，节奏流畅。"
+    )
     COSYVOICE_SAMPLE_RATE: int = 22050
     COSYVOICE_EXTRA_PAYLOAD: str = "{}"
-    COSYVOICE_SPEED: float = 1.42
+    COSYVOICE_SPEED: float = 1.6
     COSYVOICE_SEED: int = 3407
+    COSYVOICE_WARM_TIMEOUT_SECONDS: float = 1.2
+    COSYVOICE_WARM_KEEPALIVE_SECONDS: float = 90.0
+    TTS_LEXICON_PATH: str = "./knowledge_base/tts_lexicon.json"
+    TTS_ENABLE_EN_TO_ZH: bool = True
+    TTS_ENABLE_MARKDOWN_CLEAN: bool = True
+    TTS_ENABLE_AUTO_PUNCTUATION: bool = True
+    TTS_SENTENCE_MAX_CHARS: int = 120
+    TTS_SENTENCE_SOFT_CHARS: int = 64
+    TTS_REQUEST_TIMEOUT_SECONDS: float = 20.0
+    TTS_FIRST_CHUNK_TIMEOUT_SECONDS: float = 6.5
+    TTS_HEDGE_ENABLED: bool = True
+    TTS_HEDGE_DELAY_SECONDS: float = 0.85
+    TTS_HEDGE_MAX_RACERS: int = 2
 
     TTS_CACHE_DIR: str = "./uploads/tts_cache"
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./mock_interview.db"
 
     CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ALLOW_ALL: bool = True
     UPLOAD_DIR: str = "./uploads"
     CHROMA_DB_DIR: str = "./chroma_db"
     KNOWLEDGE_BASE_DIR: str = "./knowledge_base"

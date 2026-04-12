@@ -113,6 +113,13 @@ services:
       COSYVOICE_BASE_URL: http://cosyvoice2:50000
       COSYVOICE_HEALTH_PATH: /openapi.json
       COSYVOICE_VOICE: default_zh
+      COSYVOICE_SPEED: 1.6
+      COSYVOICE_WARM_TIMEOUT_SECONDS: 1.2
+      COSYVOICE_WARM_KEEPALIVE_SECONDS: 90
+      TTS_FIRST_CHUNK_TIMEOUT_SECONDS: 6.5
+      TTS_HEDGE_ENABLED: "true"
+      TTS_HEDGE_DELAY_SECONDS: 0.85
+      TTS_HEDGE_MAX_RACERS: 2
     depends_on:
       - funasr
       - cosyvoice2

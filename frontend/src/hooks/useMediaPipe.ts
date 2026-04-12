@@ -23,6 +23,28 @@ interface UseMediaPipeResult {
   captureFrame: (frameSecond: number) => BehaviorFrameSample | null
 }
 
+export const CAMERA_INSECURE_CONTEXT_ERROR = 'CAMERA_INSECURE_CONTEXT'
+export const CAMERA_UNSUPPORTED_ERROR = 'CAMERA_UNSUPPORTED'
+
+export function isPotentiallyTrustworthyHost(hostname: string): boolean {
+  if (!hostname) {
+    return false
+  }
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+    return true
+  }
+  if (hostname.endsWith('.localhost')) {
+    return true
+  }
+  if (/^127(?:\.\d{1,3}){3}$/.test(hostname)) {
+    return true
+  }
+  if (/^\[?::1\]?$/.test(hostname)) {
+    return true
+  }
+  return false
+}
+
 const IDEAL_CONSTRAINTS = {
   video: {
     width: { ideal: 640 },
@@ -164,8 +186,15 @@ export function useMediaPipe(): UseMediaPipeResult {
   }, [])
 
   const start = useCallback(async () => {
+    const hostname = window.location.hostname
+    const localHost = isPotentiallyTrustworthyHost(hostname)
+    if (!window.isSecureContext && !localHost) {
+      setWarning(CAMERA_INSECURE_CONTEXT_ERROR)
+      return
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
-      setWarning('当前浏览器不支持摄像头接口')
+      setWarning(CAMERA_UNSUPPORTED_ERROR)
       return
     }
 

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Bot, User } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { MarkdownMessage } from '@/components/interview/MarkdownMessage'
 import type { ConversationMessage } from '@/types/interview'
 
 interface ChatPanelProps {
@@ -37,7 +38,7 @@ export function ChatPanel({ messages, streamText }: ChatPanelProps) {
                       : 'bg-slate-800/80 text-slate-100 ring-1 ring-slate-700'
                   }`}
                 >
-                  {message.content}
+                  <MarkdownMessage content={message.content} />
                 </div>
                 {isCandidate && <User size={16} className="mt-1 text-blue-300" />}
               </div>
@@ -49,8 +50,7 @@ export function ChatPanel({ messages, streamText }: ChatPanelProps) {
           <div className="flex items-start gap-2">
             <Bot size={16} className="mt-1 text-cyan-300" />
             <div className="max-h-72 max-w-[88%] overflow-y-auto rounded-2xl bg-slate-800/80 px-4 py-3 text-sm text-slate-100 whitespace-pre-wrap [overflow-wrap:anywhere] ring-1 ring-cyan-400/30">
-              {streamText}
-              <span className="ml-1 inline-block h-4 w-[2px] animate-pulse bg-cyan-300 align-middle" />
+              <MarkdownMessage content={streamText} streaming />
             </div>
           </div>
         ) : null}

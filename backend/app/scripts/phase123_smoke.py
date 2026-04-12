@@ -98,7 +98,12 @@ async def _upload_resume(api_base: str, session_id: str) -> dict[str, Any]:
         return response.json()
 
 
-async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
+async def _run_ws_round(
+    ws_base: str,
+    session_id: str,
+    *,
+    recv_timeout_seconds: float = 120.0,
+) -> dict[str, Any]:
     ws_url = f"{ws_base}/interview/{session_id}"
     llm_tokens: list[str] = []
     current_response_id = ""
@@ -123,7 +128,14 @@ async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
         loop_guard = 0
         while not tts_done and loop_guard < 600:
             loop_guard += 1
-            raw = await asyncio.wait_for(ws.recv(), timeout=60.0)
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=recv_timeout_seconds)
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError(
+                    "ws_timeout "
+                    f"stage=llm_tts session={session_id} timeout={recv_timeout_seconds}s "
+                    f"llm_tokens={len(llm_tokens)} llm_done={llm_done} tts_chunks={tts_chunks}"
+                ) from exc
             if isinstance(raw, bytes):
                 continue
 
@@ -186,7 +198,14 @@ async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
         got_stt_final = False
         while loop_guard < 600:
             loop_guard += 1
-            raw = await asyncio.wait_for(ws.recv(), timeout=60.0)
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=recv_timeout_seconds)
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError(
+                    "ws_timeout "
+                    f"stage=stt session={session_id} timeout={recv_timeout_seconds}s "
+                    f"stt_partial={stt_partial}"
+                ) from exc
             if isinstance(raw, bytes):
                 continue
 
@@ -212,6 +231,21 @@ async def _run_ws_round(ws_base: str, session_id: str) -> dict[str, Any]:
         "llm_stats": llm_stats or {},
         "tts_chunks": tts_chunks,
         "tts_first_audio_seconds": tts_first_audio_seconds,
+        "tts_audio_start_ref": "llm_start",
+        "llm_first_token_seconds": (
+            (first_llm_token_at - llm_start_at)
+            if (first_llm_token_at is not None and llm_start_at is not None)
+            else None
+        ),
+        "tts_after_first_token_seconds": (
+            (tts_first_audio_seconds - (first_llm_token_at - llm_start_at))
+            if (
+                tts_first_audio_seconds is not None
+                and first_llm_token_at is not None
+                and llm_start_at is not None
+            )
+            else None
+        ),
         "tts_first_wav": tts_first_wav,
         "stt_partial_events": stt_partial,
         "stt_final": stt_final,
@@ -236,6 +270,33 @@ async def _generate_report(api_base: str, session_id: str) -> dict[str, Any]:
     raise RuntimeError("report_timeout")
 
 
+async def _fetch_tts_metrics(api_base: str) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(f"{api_base}/tts/metrics")
+        response.raise_for_status()
+        payload = response.json()
+
+    keep_keys = {
+        "count",
+        "session_count",
+        "session_success",
+        "first_audio",
+        "provider_first_chunk",
+        "attempts",
+        "hedge",
+        "latency_buckets",
+    }
+    if not isinstance(payload, dict):
+        return {}
+    return {k: payload.get(k) for k in keep_keys if k in payload}
+
+
+async def _reset_tts_metrics(api_base: str) -> None:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.delete(f"{api_base}/tts/metrics")
+        response.raise_for_status()
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Phase1-3 smoke test")
     parser.add_argument(
@@ -247,6 +308,13 @@ async def main() -> None:
     parser.add_argument(
         "--artifact-dir", default=os.getenv("SMOKE_ARTIFACT_DIR", "/tmp/phase123_smoke")
     )
+    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument(
+        "--ws-recv-timeout",
+        type=float,
+        default=float(os.getenv("SMOKE_WS_RECV_TIMEOUT_SECONDS", "120")),
+    )
+    parser.add_argument("--reset-tts-metrics", action="store_true")
     args = parser.parse_args()
 
     artifact_dir = Path(args.artifact_dir)
@@ -262,40 +330,131 @@ async def main() -> None:
         backend_health = await client.get(f"{http_health_base}/healthz")
         backend_health.raise_for_status()
 
-    session = await _create_session(api_base)
-    session_id = str(session["id"])
+    if args.reset_tts_metrics:
+        await _reset_tts_metrics(api_base)
 
-    resume = await _upload_resume(api_base, session_id)
-    ws_result = await _run_ws_round(ws_base, session_id)
-    report = await _generate_report(api_base, session_id)
+    outputs: list[dict[str, Any]] = []
+    failed_runs: list[dict[str, str]] = []
+    for _ in range(max(1, args.runs)):
+        session = await _create_session(api_base)
+        session_id = str(session["id"])
 
-    wav_saved = ""
-    if ws_result.get("tts_first_wav"):
-        wav_path = artifact_dir / f"{session_id}_tts_first_chunk.wav"
-        _save_wav(wav_path, str(ws_result["tts_first_wav"]))
-        wav_saved = str(wav_path)
+        try:
+            resume = await _upload_resume(api_base, session_id)
+            ws_result = await _run_ws_round(
+                ws_base,
+                session_id,
+                recv_timeout_seconds=max(30.0, float(args.ws_recv_timeout)),
+            )
+            report = await _generate_report(api_base, session_id)
+        except Exception as exc:
+            failed_runs.append({"session_id": session_id, "error": str(exc)})
+            continue
 
-    output = {
-        "session_id": session_id,
-        "resume_status": resume.get("status"),
-        "llm_tokens": ws_result.get("llm_tokens"),
-        "llm_done": ws_result.get("llm_done"),
-        "llm_stats": ws_result.get("llm_stats"),
-        "tts_chunks": ws_result.get("tts_chunks"),
-        "tts_first_audio_seconds": ws_result.get("tts_first_audio_seconds"),
-        "stt_partial_events": ws_result.get("stt_partial_events"),
-        "stt_final": ws_result.get("stt_final"),
-        "report_total_score": report.get("total_score"),
-        "report_generated_at": report.get("generated_at"),
-        "tts_first_chunk_wav": wav_saved,
+        wav_saved = ""
+        if ws_result.get("tts_first_wav"):
+            wav_path = artifact_dir / f"{session_id}_tts_first_chunk.wav"
+            _save_wav(wav_path, str(ws_result["tts_first_wav"]))
+            wav_saved = str(wav_path)
+
+        output = {
+            "session_id": session_id,
+            "resume_status": resume.get("status"),
+            "llm_tokens": ws_result.get("llm_tokens"),
+            "llm_done": ws_result.get("llm_done"),
+            "llm_stats": ws_result.get("llm_stats"),
+            "tts_chunks": ws_result.get("tts_chunks"),
+            "tts_first_audio_seconds": ws_result.get("tts_first_audio_seconds"),
+            "llm_first_token_seconds": ws_result.get("llm_first_token_seconds"),
+            "tts_after_first_token_seconds": ws_result.get(
+                "tts_after_first_token_seconds"
+            ),
+            "stt_partial_events": ws_result.get("stt_partial_events"),
+            "stt_final": ws_result.get("stt_final"),
+            "report_total_score": report.get("total_score"),
+            "report_generated_at": report.get("generated_at"),
+            "tts_first_chunk_wav": wav_saved,
+        }
+
+        result_path = artifact_dir / f"{session_id}_result.json"
+        result_path.write_text(
+            json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        outputs.append(output)
+
+    if len(outputs) == 1:
+        print(json.dumps(outputs[0], ensure_ascii=False))
+        return
+
+    latencies = [
+        float(item["tts_first_audio_seconds"])
+        for item in outputs
+        if isinstance(item.get("tts_first_audio_seconds"), (int, float))
+    ]
+    post_token_latencies = [
+        float(item["tts_after_first_token_seconds"])
+        for item in outputs
+        if isinstance(item.get("tts_after_first_token_seconds"), (int, float))
+    ]
+    summary: dict[str, Any] = {
+        "requested_runs": max(1, args.runs),
+        "runs": len(outputs),
+        "failed_runs": failed_runs,
+        "failed_count": len(failed_runs),
+        "sessions": [item["session_id"] for item in outputs],
     }
+    if latencies:
+        sorted_vals = sorted(latencies)
+        n = len(sorted_vals)
+        median = (
+            sorted_vals[n // 2]
+            if n % 2 == 1
+            else (sorted_vals[n // 2 - 1] + sorted_vals[n // 2]) / 2
+        )
+        p90_idx = min(n - 1, max(0, int(n * 0.9) - 1))
+        p99_idx = min(n - 1, max(0, int(n * 0.99) - 1))
+        summary.update(
+            {
+                "tts_first_audio_seconds": {
+                    "min": round(min(sorted_vals), 3),
+                    "p50": round(median, 3),
+                    "p90": round(sorted_vals[p90_idx], 3),
+                    "p99": round(sorted_vals[p99_idx], 3),
+                    "max": round(max(sorted_vals), 3),
+                    "raw": [round(v, 3) for v in latencies],
+                }
+            }
+        )
 
-    result_path = artifact_dir / f"{session_id}_result.json"
-    result_path.write_text(
-        json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8"
+    if post_token_latencies:
+        sorted_post = sorted(post_token_latencies)
+        n_post = len(sorted_post)
+        median_post = (
+            sorted_post[n_post // 2]
+            if n_post % 2 == 1
+            else (sorted_post[n_post // 2 - 1] + sorted_post[n_post // 2]) / 2
+        )
+        p90_post = min(n_post - 1, max(0, int(n_post * 0.9) - 1))
+        p99_post = min(n_post - 1, max(0, int(n_post * 0.99) - 1))
+        summary["tts_after_first_token_seconds"] = {
+            "min": round(min(sorted_post), 3),
+            "p50": round(median_post, 3),
+            "p90": round(sorted_post[p90_post], 3),
+            "p99": round(sorted_post[p99_post], 3),
+            "max": round(max(sorted_post), 3),
+            "raw": [round(v, 3) for v in post_token_latencies],
+        }
+
+    try:
+        summary["tts_metrics"] = await _fetch_tts_metrics(api_base)
+    except Exception as exc:
+        summary["tts_metrics_error"] = str(exc)
+
+    summary_path = artifact_dir / "summary.json"
+    summary_path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-
-    print(json.dumps(output, ensure_ascii=False))
+    print(json.dumps(summary, ensure_ascii=False))
 
 
 if __name__ == "__main__":

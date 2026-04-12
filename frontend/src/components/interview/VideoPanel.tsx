@@ -2,6 +2,7 @@ import { Camera, Focus, Headphones, Smile } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CAMERA_INSECURE_CONTEXT_ERROR, CAMERA_UNSUPPORTED_ERROR } from '@/hooks/useMediaPipe'
 
 interface VideoPanelProps {
   ready: boolean
@@ -13,7 +14,22 @@ interface VideoPanelProps {
 
 const asPercent = (value: number) => `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`
 
+const warningText = (warning: string | null): string | null => {
+  if (!warning) {
+    return null
+  }
+  if (warning === CAMERA_INSECURE_CONTEXT_ERROR) {
+    return `当前页面不是安全上下文（HTTPS/localhost），浏览器会拦截摄像头权限。请改用 https://${window.location.host} 访问（同 IP），并在浏览器中信任证书。`
+  }
+  if (warning === CAMERA_UNSUPPORTED_ERROR) {
+    return '当前浏览器不支持摄像头接口。'
+  }
+  return warning
+}
+
 export function VideoPanel({ ready, eyeContactScore, headPoseScore, expression, warning }: VideoPanelProps) {
+  const warningLabel = warningText(warning)
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -49,7 +65,7 @@ export function VideoPanel({ ready, eyeContactScore, headPoseScore, expression, 
           </div>
         </div>
 
-        {warning ? <p className="text-xs text-amber-300">{warning}</p> : null}
+        {warningLabel ? <p className="text-xs text-amber-300">{warningLabel}</p> : null}
       </CardContent>
     </Card>
   )

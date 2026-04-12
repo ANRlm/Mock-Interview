@@ -1,0 +1,52 @@
+{
+  "exact": {
+    "react": "瑞艾克特",
+    "typescript": "泰普斯克瑞普特",
+    "javascript": "杰瓦斯克瑞普特",
+    "node.js": "诺德杰艾丝",
+    "nodejs": "诺德杰艾丝",
+    "vue": "维尤",
+    "python": "派森",
+    "golang": "果朗",
+    "docker": "多克",
+    "kubernetes": "库伯内提斯",
+    "llm": "大语言模型",
+    "tts": "语音合成",
+    "stt": "语音识别",
+    "asr": "自动语音识别",
+    "api": "接口",
+    "sdk": "开发套件",
+    "gpu": "显卡",
+    "cpu": "处理器",
+    "ci/cd": "持续集成和持续交付",
+    "ci cd": "持续集成和持续交付",
+    "npm": "艾恩 屁 艾姆",
+    "run": "运行",
+    "build": "构建",
+    "vite": "维特",
+    "webpack": "外普艾克",
+    "next.js": "奈克斯特杰艾丝",
+    "redis": "瑞迪斯",
+    "postgresql": "波斯特格瑞斯",
+    "mysql": "迈艾艾丝丘艾勒",
+    "nginx": "恩金克斯"
+  },
+  "regex": [
+    {
+      "pattern": "\\bci\\s*/\\s*cd\\b",
+      "replacement": "持续集成和持续交付"
+    },
+    {
+      "pattern": "\\bnode\\s*\\.\\s*js\\b",
+      "replacement": "诺德杰艾丝"
+    },
+    {
+      "pattern": "\\btype\\s*script\\b",
+      "replacement": "泰普斯克瑞普特"
+    },
+    {
+      "pattern": "\\bjava\\s*script\\b",
+      "replacement": "杰瓦斯克瑞普特"
+    }
+  ]
+}

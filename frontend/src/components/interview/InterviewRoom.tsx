@@ -17,6 +17,7 @@ import { getMessages, postBehavior, updateSession } from '@/services/api'
 import { useInterviewStore } from '@/stores/interviewStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import type { ConversationMessage, TtsProvider, WsServerMessage } from '@/types/interview'
+import { MEDIA_INSECURE_CONTEXT_ERROR, MEDIA_UNSUPPORTED_ERROR } from '@/hooks/useAudioRecorder'
 
 const localMessage = (params: Omit<ConversationMessage, 'id' | 'timestamp'>): ConversationMessage => ({
   ...params,
@@ -28,7 +29,10 @@ export function InterviewRoom() {
   const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [micDenied, setMicDenied] = useState(false)
+  const [micWarningText, setMicWarningText] = useState<string | null>(null)
   const currentResponseIdRef = useRef<string>('')
+  const lastBargeInAtRef = useRef(0)
+  const currentOrigin = `${window.location.protocol}//${window.location.host}`
 
   const { selectedRole, subRole } = useSettingsStore()
   const {
@@ -134,7 +138,7 @@ export function InterviewRoom() {
         const provider = payload.provider ?? 'unknown'
         setTtsProvider(provider)
         setTtsProviderLabel(resolveProviderLabel(provider))
-        enqueueBase64(payload.data, payload.format)
+        enqueueBase64(payload.data, payload.format, payload.sample_rate)
         return
       }
       case 'tts_done': {
@@ -190,7 +194,10 @@ export function InterviewRoom() {
   const { isRecording, micLevel, start, stop } = useAudioRecorder({
     enabled: recorderEnabled,
     onSpeechStart: () => {
-      if (stage === 'speaking' || stage === 'thinking') {
+      const now = Date.now()
+      const canBargeIn = stage === 'speaking' && (ttsPlaying || ttsQueueSize > 0)
+      if (canBargeIn && now - lastBargeInAtRef.current > 800) {
+        lastBargeInAtRef.current = now
         interruptPlayback('barge_in')
       }
     },
@@ -259,8 +266,22 @@ export function InterviewRoom() {
       return
     }
 
-    start().catch(() => {
+    setMicDenied(false)
+    setMicWarningText(null)
+    start().catch((error) => {
       setMicDenied(true)
+
+      const message = error instanceof Error ? error.message : ''
+      if (message === MEDIA_INSECURE_CONTEXT_ERROR) {
+        setMicWarningText(
+          `当前页面不是安全上下文（HTTPS/localhost），浏览器会拦截麦克风权限。请改用 https://${window.location.host} 访问（同 IP），并在浏览器中信任证书。当前地址：${currentOrigin}`,
+        )
+      } else if (message === MEDIA_UNSUPPORTED_ERROR) {
+        setMicWarningText('当前浏览器不支持麦克风接口。')
+      } else {
+        setMicWarningText('麦克风权限不可用，已自动切换到文本模式。')
+      }
+
       setInputMode('text')
       setStage('idle')
     })
@@ -391,7 +412,7 @@ export function InterviewRoom() {
           <p className="text-xs text-slate-400">
             {inputMode === 'voice' ? '当前为语音模式，系统自动进行录音与静音检测。' : '当前为文本模式，可手动输入回答。'}
           </p>
-          {micDenied ? <p className="text-xs text-amber-300">麦克风权限不可用，已自动切换到文本模式。</p> : null}
+          {micDenied && micWarningText ? <p className="text-xs text-amber-300">{micWarningText}</p> : null}
           <Textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}

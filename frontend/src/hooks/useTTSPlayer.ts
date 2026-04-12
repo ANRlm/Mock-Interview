@@ -2,18 +2,31 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface QueueItem {
   audioBytes: ArrayBuffer
-  format: 'wav' | 'mp3'
+  format: 'wav' | 'mp3' | 'pcm_s16le'
+  sampleRate: number
 }
 
 interface UseTTSPlayerResult {
   playing: boolean
   queueSize: number
-  enqueueBase64: (base64Audio: string, format: 'wav' | 'mp3') => void
+  enqueueBase64: (base64Audio: string, format: 'wav' | 'mp3' | 'pcm_s16le', sampleRate?: number) => void
   clear: () => void
 }
 
 const CROSSFADE_MS = 16
 const PREFETCH_MIN_QUEUE = 1
+const DEFAULT_SAMPLE_RATE = 22050
+
+function pcm16ToAudioBuffer(ctx: AudioContext, pcmBytes: ArrayBuffer, sampleRate: number): AudioBuffer {
+  const source = new Int16Array(pcmBytes)
+  const frames = source.length
+  const buffer = ctx.createBuffer(1, Math.max(1, frames), sampleRate)
+  const channel = buffer.getChannelData(0)
+  for (let i = 0; i < frames; i += 1) {
+    channel[i] = source[i] / 32768
+  }
+  return buffer
+}
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binary = window.atob(base64)
@@ -97,7 +110,10 @@ export function useTTSPlayer(onQueueFinished?: () => void): UseTTSPlayerResult {
         .catch(() => undefined)
         .then(async () => {
           const ctx = await ensureAudioContext()
-          const decoded = await ctx.decodeAudioData(next.audioBytes.slice(0))
+          const decoded =
+            next.format === 'pcm_s16le'
+              ? pcm16ToAudioBuffer(ctx, next.audioBytes, next.sampleRate)
+              : await ctx.decodeAudioData(next.audioBytes.slice(0))
 
           stopCurrentNode()
 
@@ -137,10 +153,11 @@ export function useTTSPlayer(onQueueFinished?: () => void): UseTTSPlayerResult {
   }, [ensureAudioContext, stopCurrentNode])
 
   const enqueueBase64 = useCallback(
-    (base64Audio: string, format: 'wav' | 'mp3') => {
+    (base64Audio: string, format: 'wav' | 'mp3' | 'pcm_s16le', sampleRate?: number) => {
       queueRef.current.push({
         audioBytes: base64ToArrayBuffer(base64Audio),
         format,
+        sampleRate: sampleRate && sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE,
       })
       setQueueSize(queueRef.current.length)
 

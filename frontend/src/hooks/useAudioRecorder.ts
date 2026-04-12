@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { isPotentiallyTrustworthyHost } from '@/hooks/useMediaPipe'
+
 interface UseAudioRecorderParams {
   onChunk: (chunkBase64: string, sampleRate: number) => void
   onSpeechStart?: () => void
@@ -15,9 +17,13 @@ interface UseAudioRecorderResult {
 }
 
 const CHUNK_MS = 120
-const SILENCE_THRESHOLD = 0.012
+const SILENCE_THRESHOLD = 0.016
 const MAX_SILENCE_MS = 850
 const TARGET_SAMPLE_RATE = 16000
+const SPEECH_ACTIVATION_MS = 180
+
+export const MEDIA_INSECURE_CONTEXT_ERROR = 'MEDIA_INSECURE_CONTEXT'
+export const MEDIA_UNSUPPORTED_ERROR = 'MEDIA_UNSUPPORTED'
 
 function float32ToPCM16(input: Float32Array): Int16Array {
   const output = new Int16Array(input.length)
@@ -78,6 +84,7 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
   const pcmBufferRef = useRef<number[]>([])
   const sourceSampleRateRef = useRef(TARGET_SAMPLE_RATE)
   const lastVoiceAtRef = useRef(0)
+  const speechCandidateSinceRef = useRef(0)
   const speechStartedRef = useRef(false)
   const runningRef = useRef(false)
   const chunkTimerRef = useRef<number | null>(null)
@@ -130,6 +137,7 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
     audioContextRef.current = null
     pcmBufferRef.current = []
     speechStartedRef.current = false
+    speechCandidateSinceRef.current = 0
     runningRef.current = false
     setMicLevel(0)
     setIsRecording(false)
@@ -147,8 +155,14 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
       return
     }
 
+    const hostname = window.location.hostname
+    const localHost = isPotentiallyTrustworthyHost(hostname)
+    if (!window.isSecureContext && !localHost) {
+      throw new Error(MEDIA_INSECURE_CONTEXT_ERROR)
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('getUserMedia is not available in this browser')
+      throw new Error(MEDIA_UNSUPPORTED_ERROR)
     }
 
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -179,6 +193,7 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
     runningRef.current = true
     setIsRecording(true)
     speechStartedRef.current = false
+    speechCandidateSinceRef.current = 0
     lastVoiceAtRef.current = Date.now()
 
     processor.onaudioprocess = (event) => {
@@ -198,10 +213,19 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
       const now = Date.now()
       if (rms > SILENCE_THRESHOLD) {
         if (!speechStartedRef.current) {
-          onSpeechStartRef.current?.()
+          if (!speechCandidateSinceRef.current) {
+            speechCandidateSinceRef.current = now
+          }
+          if (now - speechCandidateSinceRef.current >= SPEECH_ACTIVATION_MS) {
+            onSpeechStartRef.current?.()
+            speechStartedRef.current = true
+            lastVoiceAtRef.current = now
+          }
+        } else {
+          lastVoiceAtRef.current = now
         }
-        speechStartedRef.current = true
-        lastVoiceAtRef.current = now
+      } else if (!speechStartedRef.current) {
+        speechCandidateSinceRef.current = 0
       }
 
       if (speechStartedRef.current) {
@@ -213,6 +237,7 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
           flushChunk()
           onSpeechEndRef.current()
           speechStartedRef.current = false
+          speechCandidateSinceRef.current = 0
           lastVoiceAtRef.current = now
         }
       }

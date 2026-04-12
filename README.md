@@ -94,8 +94,41 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke --arti
 
 - `LLM_BASE_URL`、`LLM_MODEL`、`LLM_DISABLE_THINKING`
 - `FUNASR_BASE_URL`
-- `COSYVOICE_BASE_URL`、`COSYVOICE_TTS_PATH`
+- `COSYVOICE_BASE_URL`、`COSYVOICE_TTS_PATH`、`COSYVOICE_MODE`、`COSYVOICE_SPEED`
 - `DATABASE_URL`、`CHROMA_DB_DIR`、`TTS_CACHE_DIR`
+
+当前 GPU 默认建议：
+
+- `COSYVOICE_MODE=sft`（`inference_instruct` 在 CosyVoice2-0.5B 当前实现下不稳定）
+- `COSYVOICE_SPEED=1.6`（质量优先，降低技术词含量高场景的发音漂移）
+- `COSYVOICE_VOICE=default_zh`（优先稳定性，减少口音漂移）
+- `TTS_LEXICON_PATH=./knowledge_base/tts_lexicon.json`（技术词发音词典，可热更新）
+- `TTS_SENTENCE_MAX_CHARS=120`、`TTS_SENTENCE_SOFT_CHARS=64`（长句自动切分，降低卡顿与发音漂移）
+- `TTS_REQUEST_TIMEOUT_SECONDS=20`（句级超时守卫，超时自动尝试备选参数）
+- `TTS_HEDGE_ENABLED=true`、`TTS_HEDGE_DELAY_SECONDS=0.85`、`TTS_HEDGE_MAX_RACERS=2`（首包超时尾部优化：延迟发起并行候选，请求先返回者胜出）
+- 当前 hedge 仅在“跨端点候选（如 instruct -> sft）”时启用；同端点候选全部顺序执行，避免 GPU 争抢导致长尾放大
+- `TTS_FIRST_CHUNK_TIMEOUT_SECONDS=6.5`（仅首分句首包超时守卫，优先避免误判导致整轮静音）
+- `COSYVOICE_WARM_TIMEOUT_SECONDS=1.2`、`COSYVOICE_WARM_KEEPALIVE_SECONDS=90`（提高热身成功率并延长保活，优先压低随机冷启动尖峰）
+- WS 端首包策略已改为更激进低门槛（更短分句 + 更小首次 flush），优先尽快有声，再在后续分句补自然度
+- 短中文分句不再额外降速（避免 3~8 字短句被拖慢）；缓存 schema 已升级避免旧缓存干扰
+- 首分句发送前增加轻量 preflight（"好的。"），用于降低随机冷启动造成的 3s+ 首包尾部
+- 局域网访问建议启用 `CORS_ALLOW_ALL=true`，并使用前端同源代理（`VITE_API_BASE_URL=/api`、`VITE_WS_BASE_URL=/ws`）
+
+压测建议（观察 long-tail 收敛）：
+
+- 运行：`python app/scripts/phase123_smoke.py --runs 12 --reset-tts-metrics`
+- 若偶发单轮超时（服务启动后首轮或负载抖动）：`python app/scripts/phase123_smoke.py --runs 12 --reset-tts-metrics --ws-recv-timeout 150`
+- 结果：优先看 `summary.json` 中 `tts_first_audio_seconds` 与 `tts_metrics.hedge`（触发率、最大并发、是否明显降低 3s+ 桶占比）
+- 若 `tts_metrics.count=0`，先看每轮 `*_result.json` 的 `tts_chunks`；当前脚本会在 `summary.json` 输出 `failed_runs`、并在 metrics 中给出 `session_success.rate`
+- 压测结果新增 `tts_after_first_token_seconds`，可区分“LLM 首 token 慢”与“TTS 首包慢”两类瓶颈
+
+### 局域网摄像头/麦克风说明（无域名）
+
+浏览器仅在安全上下文允许调用摄像头/麦克风。`http://IP:端口` 通常会被拦截。当前前端容器已默认在启动时自动生成自签名证书并启用 HTTPS：
+
+- 访问地址改为：`https://<你的局域网IP>:5173`
+- 首次访问需在浏览器信任该自签名证书（仅开发环境）
+- 证书位置：`frontend/certs/dev-cert.pem`、`frontend/certs/dev-key.pem`
 
 默认值见 `backend/.env.example`。
 

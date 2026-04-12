@@ -75,7 +75,14 @@ export type WsServerMessage =
   | { type: 'llm_token'; token: string; response_id?: string }
   | { type: 'llm_done'; full_text: string; turn_index: number; response_id?: string }
   | ({ type: 'llm_stats' } & LlmTurnStats)
-  | { type: 'tts_audio'; data: string; format: 'wav' | 'mp3'; provider?: TtsProvider; response_id?: string }
+  | {
+      type: 'tts_audio'
+      data: string
+      format: 'wav' | 'mp3' | 'pcm_s16le'
+      sample_rate?: number
+      provider?: TtsProvider
+      response_id?: string
+    }
   | { type: 'tts_interrupted'; reason: string }
   | { type: 'tts_done'; response_id?: string }
   | { type: 'interview_end'; reason: string }

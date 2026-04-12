@@ -20,6 +20,7 @@ from app.database import AsyncSessionLocal
 from app.models.message import ConversationMessage, MessageRole
 from app.models.session import InterviewSession
 from app.services.stt_service import stt_service
+from app.services.tts_metrics_service import tts_metrics_service
 from app.services.tts_service import tts_service
 
 router = APIRouter()
@@ -27,15 +28,26 @@ logger = logging.getLogger(__name__)
 
 _TTS_END_MARKERS = {"。", "！", "？", "!", "?", ";", "；", "\n"}
 _TTS_SOFT_SPLIT_MARKERS = {"，", ",", "、", "：", ":", " "}
-_TTS_MIN_HARD_CHARS = 6
-_TTS_SOFT_SPLIT_TRIGGER_CHARS = 16
-_TTS_FORCE_SPLIT_CHARS = 38
-_TTS_FORCE_SPLIT_AT = 24
-_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 8
-_TTS_EARLY_FORCE_SPLIT_CHARS = 18
-_TTS_EARLY_FORCE_SPLIT_AT = 12
-_TTS_FIRST_PCM_FLUSH_BYTES = 4_000
-_TTS_PCM_FLUSH_BYTES = 8_000
+_TTS_MIN_HARD_CHARS = 3
+_TTS_SOFT_SPLIT_TRIGGER_CHARS = 12
+_TTS_FORCE_SPLIT_CHARS = 30
+_TTS_FORCE_SPLIT_AT = 18
+_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 4
+_TTS_EARLY_FORCE_SPLIT_CHARS = 5
+_TTS_EARLY_FORCE_SPLIT_AT = 3
+_TTS_FIRST_PCM_FLUSH_BYTES = 384
+_TTS_PCM_FLUSH_BYTES = 12_000
+_TTS_FIRST_SEGMENT_TARGET_CHARS = 2
+_TTS_FIRST_SEGMENT_MAX_CHARS = 3
+_TTS_STREAM_SEGMENT_TARGET_CHARS = 9
+_TTS_STREAM_SEGMENT_MAX_CHARS = 16
+_TTS_FIRST_SEGMENT_TARGET_CHARS_EN = 2
+_TTS_FIRST_SEGMENT_MAX_CHARS_EN = 3
+_TTS_STREAM_SEGMENT_TARGET_CHARS_EN = 6
+_TTS_STREAM_SEGMENT_MAX_CHARS_EN = 12
+_TTS_PREWARM_SESSION_COOLDOWN_SECONDS = 14.0
+_LAST_TTS_PREWARM_AT = 0.0
+_TTS_PREFLIGHT_SAMPLE_TEXT = "好的。"
 
 
 @dataclass
@@ -204,6 +216,13 @@ async def _handle_candidate_text(
     session_id = runtime.session_id
     cancel_event = runtime.response_cancel_event
 
+    global _LAST_TTS_PREWARM_AT
+    now = time.perf_counter()
+    if now - _LAST_TTS_PREWARM_AT >= _TTS_PREWARM_SESSION_COOLDOWN_SECONDS:
+        _LAST_TTS_PREWARM_AT = now
+        with suppress(Exception):
+            await tts_service.warmup_if_needed()
+
     async with AsyncSessionLocal() as db:
         session = await db.get(InterviewSession, session_id)
         if session is None:
@@ -249,11 +268,89 @@ async def _handle_candidate_text(
 
     tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
     tts_start = time.perf_counter()
+    first_audio_latency_ref: list[float | None] = [None]
     tts_chunks = 0
     tts_bytes = 0
 
     async def _tts_worker() -> None:
         nonlocal tts_chunks, tts_bytes
+
+        async def _emit_tts_text(tts_input: str) -> bool:
+            nonlocal tts_chunks, tts_bytes
+            pcm_buffer = bytearray()
+            first_flush_sent = False
+            first_audio_sent = False
+
+            if (
+                queued_sentence_count == 0
+                and runtime.active_response_id == response_id
+                and not cancel_event.is_set()
+            ):
+                try:
+                    async for _ in tts_service.stream_synthesize(
+                        _TTS_PREFLIGHT_SAMPLE_TEXT
+                    ):
+                        break
+                except Exception:
+                    pass
+
+            async def flush_buffer(force: bool = False) -> None:
+                nonlocal first_flush_sent, first_audio_sent, tts_chunks, tts_bytes
+                if not pcm_buffer:
+                    return
+                threshold = (
+                    _TTS_FIRST_PCM_FLUSH_BYTES
+                    if not first_flush_sent
+                    else _TTS_PCM_FLUSH_BYTES
+                )
+                if not force and len(pcm_buffer) < threshold:
+                    return
+
+                pcm_bytes = bytes(pcm_buffer)
+                pcm_buffer.clear()
+                if len(pcm_bytes) % 2 != 0:
+                    pcm_bytes = pcm_bytes[:-1]
+                if not pcm_bytes:
+                    return
+
+                first_flush_sent = True
+                tts_chunks += 1
+                tts_bytes += len(pcm_bytes)
+
+                if not first_audio_sent:
+                    first_audio_sent = True
+                    logger.info(
+                        "TTS first audio sent session=%s response_id=%s text_len=%s latency=%.3fs",
+                        session_id,
+                        response_id,
+                        len(tts_input),
+                        time.perf_counter() - tts_start,
+                    )
+                    if first_audio_latency_ref[0] is None:
+                        first_audio_latency_ref[0] = time.perf_counter() - tts_start
+
+                if runtime.active_response_id != response_id:
+                    return
+
+                await runtime.send_json(
+                    {
+                        "type": "tts_audio",
+                        "data": base64.b64encode(pcm_bytes).decode("utf-8"),
+                        "format": "pcm_s16le",
+                        "sample_rate": settings.COSYVOICE_SAMPLE_RATE,
+                        "provider": "cosyvoice2-http",
+                        "response_id": response_id,
+                    }
+                )
+
+            async for pcm_chunk in tts_service.stream_synthesize(tts_input):
+                if cancel_event.is_set() or runtime.active_response_id != response_id:
+                    break
+                pcm_buffer.extend(pcm_chunk)
+                await flush_buffer(force=False)
+
+            await flush_buffer(force=True)
+            return first_flush_sent
 
         while True:
             sentence = await tts_queue.get()
@@ -266,54 +363,14 @@ async def _handle_candidate_text(
                 continue
 
             tts_input = tts_service.prepare_text_for_tts(sentence, fallback="")
+            plain_len = len(tts_input.strip("，,。！？!?:;； ")) if tts_input else 0
+            if tts_input and plain_len < 2:
+                tts_queue.task_done()
+                continue
+
             if tts_input:
                 try:
-                    pcm_buffer = bytearray()
-                    first_flush_sent = False
-
-                    async def flush_buffer(force: bool = False) -> None:
-                        nonlocal first_flush_sent, tts_chunks, tts_bytes
-                        if not pcm_buffer:
-                            return
-                        threshold = (
-                            _TTS_FIRST_PCM_FLUSH_BYTES
-                            if not first_flush_sent
-                            else _TTS_PCM_FLUSH_BYTES
-                        )
-                        if not force and len(pcm_buffer) < threshold:
-                            return
-
-                        pcm_bytes = bytes(pcm_buffer)
-                        pcm_buffer.clear()
-                        wav_chunk = tts_service.pcm_chunk_to_wav(pcm_bytes)
-                        if not wav_chunk:
-                            return
-
-                        first_flush_sent = True
-                        tts_chunks += 1
-                        tts_bytes += len(wav_chunk)
-                        for playable_wav in _split_wav_for_playback(wav_chunk):
-                            if runtime.active_response_id != response_id:
-                                break
-                            await runtime.send_json(
-                                {
-                                    "type": "tts_audio",
-                                    "data": base64.b64encode(playable_wav).decode(
-                                        "utf-8"
-                                    ),
-                                    "format": "wav",
-                                    "provider": "cosyvoice2-http",
-                                    "response_id": response_id,
-                                }
-                            )
-
-                    async for pcm_chunk in tts_service.stream_synthesize(tts_input):
-                        if cancel_event.is_set():
-                            break
-                        pcm_buffer.extend(pcm_chunk)
-                        await flush_buffer(force=False)
-
-                    await flush_buffer(force=True)
+                    await _emit_tts_text(tts_input)
                 except Exception as exc:
                     logger.warning(
                         "TTS stream failed session=%s text_len=%s error=%s",
@@ -328,6 +385,17 @@ async def _handle_candidate_text(
     queued_sentence_count = 0
     pending_tts_buffer = ""
     verifier = None
+
+    async def _enqueue_tts_sentence(sentence: str) -> None:
+        nonlocal queued_sentence_count
+
+        segments = _split_sentence_for_tts(
+            sentence,
+            first_segment=(queued_sentence_count == 0),
+        )
+        for segment in segments:
+            await tts_queue.put(segment)
+            queued_sentence_count += 1
 
     try:
         llm_start = time.perf_counter()
@@ -358,8 +426,7 @@ async def _handle_candidate_text(
                     aggressive=(queued_sentence_count == 0),
                 )
                 for sentence in ready_sentences:
-                    await tts_queue.put(sentence)
-                    queued_sentence_count += 1
+                    await _enqueue_tts_sentence(sentence)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -380,8 +447,7 @@ async def _handle_candidate_text(
                     aggressive=(queued_sentence_count == 0),
                 )
                 for sentence in ready_sentences:
-                    await tts_queue.put(sentence)
-                    queued_sentence_count += 1
+                    await _enqueue_tts_sentence(sentence)
 
         if cancel_event.is_set():
             return
@@ -403,12 +469,12 @@ async def _handle_candidate_text(
         if runtime.active_response_id != response_id:
             return
         tail_sentence = pending_tts_buffer.strip()
+        if tail_sentence and len(tail_sentence) < 2 and queued_sentence_count > 0:
+            tail_sentence = ""
         if tail_sentence:
-            await tts_queue.put(tail_sentence)
-            queued_sentence_count += 1
+            await _enqueue_tts_sentence(tail_sentence)
         if queued_sentence_count == 0:
-            await tts_queue.put(llm_text)
-            queued_sentence_count += 1
+            await _enqueue_tts_sentence(llm_text)
 
         async with AsyncSessionLocal() as db:
             interviewer_msg = ConversationMessage(
@@ -442,6 +508,18 @@ async def _handle_candidate_text(
             time.perf_counter() - tts_start,
         )
 
+        tts_metrics_service.record(
+            {
+                "session_id": str(session_id),
+                "response_id": response_id,
+                "tts_first_audio_seconds": first_audio_latency_ref[0],
+                "tts_chunks": tts_chunks,
+                "tts_bytes": tts_bytes,
+                "llm_generated_chars": llm_token_chars,
+                "tts_success": tts_chunks > 0,
+            }
+        )
+
         if not cancel_event.is_set() and runtime.active_response_id == response_id:
             await runtime.send_json({"type": "tts_done", "response_id": response_id})
     except asyncio.CancelledError:
@@ -452,10 +530,6 @@ async def _handle_candidate_text(
             tts_worker_task.cancel()
             with suppress(asyncio.CancelledError):
                 await tts_worker_task
-
-
-def _split_wav_for_playback(wav_bytes: bytes) -> list[bytes]:
-    return [wav_bytes]
 
 
 async def _handle_audio_turn(
@@ -630,3 +704,68 @@ def _drain_tts_ready_sentences(
                 rest = rest[force_at:]
 
     return ready, rest
+
+
+def _split_sentence_for_tts(sentence: str, *, first_segment: bool) -> list[str]:
+    text = sentence.strip()
+    if not text:
+        return []
+
+    has_en = any(("A" <= ch <= "Z") or ("a" <= ch <= "z") for ch in text)
+
+    target_chars = (
+        (
+            _TTS_FIRST_SEGMENT_TARGET_CHARS_EN
+            if first_segment
+            else _TTS_STREAM_SEGMENT_TARGET_CHARS_EN
+        )
+        if has_en
+        else (
+            _TTS_FIRST_SEGMENT_TARGET_CHARS
+            if first_segment
+            else _TTS_STREAM_SEGMENT_TARGET_CHARS
+        )
+    )
+    max_chars = (
+        (
+            _TTS_FIRST_SEGMENT_MAX_CHARS_EN
+            if first_segment
+            else _TTS_STREAM_SEGMENT_MAX_CHARS_EN
+        )
+        if has_en
+        else (
+            _TTS_FIRST_SEGMENT_MAX_CHARS
+            if first_segment
+            else _TTS_STREAM_SEGMENT_MAX_CHARS
+        )
+    )
+
+    if len(text) <= max_chars:
+        return [text]
+
+    segments: list[str] = []
+    buffer = text
+    while buffer:
+        if len(buffer) <= max_chars:
+            segments.append(buffer.strip())
+            break
+
+        split_pos = -1
+        search_end = min(len(buffer), max_chars)
+        for idx in range(search_end - 1, target_chars - 2, -1):
+            if (
+                buffer[idx] in _TTS_SOFT_SPLIT_MARKERS
+                or buffer[idx] in _TTS_END_MARKERS
+            ):
+                split_pos = idx
+                break
+
+        if split_pos < 0:
+            split_pos = max_chars - 1
+
+        part = buffer[: split_pos + 1].strip()
+        if part:
+            segments.append(part)
+        buffer = buffer[split_pos + 1 :].strip()
+
+    return [seg for seg in segments if seg]
