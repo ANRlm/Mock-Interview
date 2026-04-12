@@ -1,16 +1,24 @@
 import { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { InterviewRoom } from '@/components/interview/InterviewRoom'
 import { createSession, updateSession, uploadResume } from '@/services/api'
+import { useAuthStore } from '@/stores/authStore'
 import { useInterviewStore } from '@/stores/interviewStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 
 export function InterviewPage() {
+  const navigate = useNavigate()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const { selectedRole, subRole, resumeFile, setResumeFile } = useSettingsStore()
   const { session, setSession } = useInterviewStore()
   const creatingRef = useRef(false)
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
     if (session || creatingRef.current) {
       return
     }
@@ -31,7 +39,7 @@ export function InterviewPage() {
       .finally(() => {
         creatingRef.current = false
       })
-  }, [resumeFile, selectedRole, setResumeFile, setSession, session, subRole])
+  }, [resumeFile, selectedRole, setResumeFile, setSession, session, subRole, isAuthenticated, navigate])
 
   if (!session) {
     return (
