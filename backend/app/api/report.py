@@ -7,9 +7,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.report import InterviewReport
 from app.models.session import InterviewSession
+from app.models.user import User  # noqa: F401
 from app.schemas import ReportGenerateResponse, ReportRead
 from app.services.report_service import is_report_pending, trigger_report_generation
 
@@ -22,7 +24,9 @@ router = APIRouter(prefix="/sessions", tags=["report"])
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def generate_report(
-    session_id: UUID, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> ReportGenerateResponse:
     session = await db.get(InterviewSession, session_id)
     if session is None:
@@ -34,7 +38,9 @@ async def generate_report(
 
 @router.get("/{session_id}/report", response_model=ReportRead)
 async def get_report(
-    session_id: UUID, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> ReportRead | JSONResponse:
     session = await db.get(InterviewSession, session_id)
     if session is None:
@@ -44,7 +50,7 @@ async def get_report(
         select(InterviewReport).where(InterviewReport.session_id == session_id)
     )
     if report is None:
-        if is_report_pending(session_id):
+        if await is_report_pending(session_id):
             return JSONResponse(
                 status_code=status.HTTP_202_ACCEPTED,
                 content={"detail": "Report generating"},

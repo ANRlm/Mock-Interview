@@ -3,21 +3,30 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.message import ConversationMessage
 from app.models.session import InterviewSession, SessionStatus
+from app.models.user import User
 from app.schemas import MessageRead, SessionCreate, SessionRead, SessionUpdate
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("", response_model=SessionRead, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 async def create_session(
-    payload: SessionCreate, db: AsyncSession = Depends(get_db)
+    request: Request,
+    payload: SessionCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> SessionRead:
     session = InterviewSession(
         job_role=payload.job_role,
@@ -32,7 +41,9 @@ async def create_session(
 
 @router.get("/{session_id}", response_model=SessionRead)
 async def get_session(
-    session_id: UUID, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> SessionRead:
     session = await db.get(InterviewSession, session_id)
     if session is None:
@@ -45,6 +56,7 @@ async def update_session(
     session_id: UUID,
     payload: SessionUpdate,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> SessionRead:
     session = await db.get(InterviewSession, session_id)
     if session is None:
@@ -64,7 +76,9 @@ async def update_session(
 
 @router.get("/{session_id}/messages", response_model=list[MessageRead])
 async def get_messages(
-    session_id: UUID, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> list[MessageRead]:
     session = await db.get(InterviewSession, session_id)
     if session is None:

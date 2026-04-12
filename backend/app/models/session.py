@@ -47,3 +47,4 @@ class InterviewSession(Base):
         nullable=False,
         server_default=func.now(),
     )
+    report_generating: Mapped[bool] = mapped_column(default=False)

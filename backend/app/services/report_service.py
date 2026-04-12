@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -15,14 +16,18 @@ from app.models.session import InterviewSession
 from app.services.fluency_service import analyze_fluency
 from app.services.vision_service import vision_service
 
-_report_tasks: set[UUID] = set()
+logger = logging.getLogger(__name__)
 
 
 async def trigger_report_generation(session_id: UUID) -> str:
-    if session_id in _report_tasks:
-        return "pending"
-
-    _report_tasks.add(session_id)
+    async with AsyncSessionLocal() as db:
+        session = await db.get(InterviewSession, session_id)
+        if session is None:
+            return "error: session not found"
+        if session.report_generating:
+            return "pending"
+        session.report_generating = True
+        await db.commit()
     asyncio.create_task(_generate_report(session_id))
     return "pending"
 
@@ -32,6 +37,7 @@ async def _generate_report(session_id: UUID) -> None:
         async with AsyncSessionLocal() as db:
             session = await db.get(InterviewSession, session_id)
             if session is None:
+                logger.warning("Report generation: session %s not found", session_id)
                 return
 
             messages_result = await db.execute(
@@ -182,12 +188,22 @@ async def _generate_report(session_id: UUID) -> None:
                 report.generated_at = datetime.now(timezone.utc)
 
             await db.commit()
+    except Exception as exc:
+        logger.exception("Report generation failed for session %s: %s", session_id, exc)
     finally:
-        _report_tasks.discard(session_id)
+        async with AsyncSessionLocal() as db:
+            session = await db.get(InterviewSession, session_id)
+            if session is not None:
+                session.report_generating = False
+                await db.commit()
 
 
-def is_report_pending(session_id: UUID) -> bool:
-    return session_id in _report_tasks
+async def is_report_pending(session_id: UUID) -> bool:
+    async with AsyncSessionLocal() as db:
+        session = await db.get(InterviewSession, session_id)
+        if session is None:
+            return False
+        return session.report_generating
 
 
 def _emotion_distribution(emotions: list[str]) -> dict[str, int]:

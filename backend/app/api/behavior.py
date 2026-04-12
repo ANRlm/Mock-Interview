@@ -3,23 +3,31 @@ from __future__ import annotations
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.database import AsyncSessionLocal, get_db
 from app.models.behavior_log import BehaviorLog
 from app.models.session import InterviewSession
+from app.models.user import User  # noqa: F401
 from app.schemas import BehaviorBatchInput
 from app.services.vision_service import vision_service
 
 router = APIRouter(prefix="/sessions", tags=["behavior"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/{session_id}/behavior", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("120/minute")
 async def post_behavior(
+    request: Request,
     session_id: UUID,
     payload: BehaviorBatchInput,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> dict[str, str]:
     session = await db.get(InterviewSession, session_id)
     if session is None:

@@ -11,17 +11,20 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.agents.interviewer_agent import InterviewerAgent
 from app.config import settings
+from app.core.security import decode_token
 from app.database import AsyncSessionLocal
+from app.models.behavior_log import BehaviorLog
 from app.models.message import ConversationMessage, MessageRole
 from app.models.session import InterviewSession
 from app.services.stt_service import stt_service
 from app.services.tts_metrics_service import tts_metrics_service
 from app.services.tts_service import tts_service
+from app.services.vision_service import vision_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -101,7 +104,26 @@ class SessionRuntime:
 
 
 @router.websocket("/interview/{session_id}")
-async def interview_socket(websocket: WebSocket, session_id: UUID) -> None:
+async def interview_socket(
+    websocket: WebSocket,
+    session_id: UUID,
+    token: str | None = Query(default=None),
+) -> None:
+    if token is None:
+        await websocket.send_json(
+            {"type": "error", "code": "UNAUTHORIZED", "message": "Token required"}
+        )
+        await websocket.close(code=4401)
+        return
+
+    payload = decode_token(token)
+    if payload is None:
+        await websocket.send_json(
+            {"type": "error", "code": "UNAUTHORIZED", "message": "Invalid or expired token"}
+        )
+        await websocket.close(code=4401)
+        return
+
     await websocket.accept()
 
     async with AsyncSessionLocal() as db:
@@ -183,6 +205,11 @@ async def interview_socket(websocket: WebSocket, session_id: UUID) -> None:
                 runtime.audio_buffer.clear()
 
                 await runtime.start_audio_turn(pcm_bytes, runtime.sample_rate)
+                continue
+
+            if msg_type == "behavior_frame":
+                # Real-time behavior analysis and feedback
+                await _handle_behavior_frame(runtime, payload)
                 continue
 
             await runtime.send_json(
@@ -769,3 +796,63 @@ def _split_sentence_for_tts(sentence: str, *, first_segment: bool) -> list[str]:
         buffer = buffer[split_pos + 1 :].strip()
 
     return [seg for seg in segments if seg]
+
+
+_BEHAVIOR_WARNING_COOLDOWN = 10.0  # seconds between warnings
+
+
+async def _handle_behavior_frame(
+    runtime: SessionRuntime,
+    payload: dict[str, Any],
+) -> None:
+    """Handle real-time behavior frame from frontend MediaPipe analysis."""
+    session_id = runtime.session_id
+
+    try:
+        frame_second = int(payload.get("frame_second", 0))
+        eye_contact = float(payload.get("eye_contact_score", 0.5))
+        head_pose = float(payload.get("head_pose_score", 0.5))
+        gaze_x = payload.get("gaze_x")
+        gaze_y = payload.get("gaze_y")
+        image_b64 = payload.get("image_base64")
+
+        # Analyze emotion from frame
+        emotion, confidence = await vision_service.analyze_frame(image_b64)
+
+        # Persist to DB
+        async with AsyncSessionLocal() as db:
+            item = BehaviorLog(
+                session_id=session_id,
+                frame_second=frame_second,
+                emotion=emotion,
+                emotion_confidence=confidence,
+                eye_contact_score=eye_contact,
+                head_pose_score=head_pose,
+                gaze_x=gaze_x,
+                gaze_y=gaze_y,
+            )
+            db.add(item)
+            await db.commit()
+
+        # Send real-time feedback if scores are low
+        warnings: list[str] = []
+        if eye_contact < 0.45:
+            warnings.append("视线偏离镜头，请适当回归")
+        if head_pose < 0.50:
+            warnings.append("头部倾斜较大，请保持正面面对镜头")
+        if gaze_x is not None and gaze_y is not None:
+            import math
+            gaze_dist = math.sqrt(gaze_x ** 2 + gaze_y ** 2)
+            if gaze_dist > 0.35:
+                warnings.append("视线偏移较多，请注视镜头方向")
+        if emotion in {"sad", "angry", "fear"}:
+            warnings.append("表情偏消极，请保持更积极的面部状态")
+
+        if warnings:
+            await runtime.send_json({
+                "type": "behavior_warning",
+                "warnings": warnings,
+                "frame_second": frame_second,
+            })
+    except Exception as exc:
+        logger.warning("Behavior frame analysis failed session=%s: %s", session_id, exc)

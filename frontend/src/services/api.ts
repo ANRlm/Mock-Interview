@@ -11,11 +11,32 @@ import type {
   UploadResumeResponse,
 } from '@/types/api'
 import type { ConversationMessage, InterviewReport, InterviewSession } from '@/types/interview'
+import { useAuthStore } from '@/stores/authStore'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
   timeout: 20000,
 })
+
+// Add auth token to all requests
+api.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// Handle 401 by logging out
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      useAuthStore.getState().logout()
+    }
+    return Promise.reject(error)
+  },
+)
 
 export async function createSession(payload: CreateSessionPayload): Promise<InterviewSession> {
   const { data } = await api.post<InterviewSession>('/sessions', payload)

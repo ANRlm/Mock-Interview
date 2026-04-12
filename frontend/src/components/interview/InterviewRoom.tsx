@@ -30,6 +30,7 @@ export function InterviewRoom() {
   const [input, setInput] = useState('')
   const [micDenied, setMicDenied] = useState(false)
   const [micWarningText, setMicWarningText] = useState<string | null>(null)
+  const [behaviorWarning, setBehaviorWarning] = useState<string | null>(null)
   const currentResponseIdRef = useRef<string>('')
   const lastBargeInAtRef = useRef(0)
   const currentOrigin = `${window.location.protocol}//${window.location.host}`
@@ -161,6 +162,13 @@ export function InterviewRoom() {
         setStage('idle')
         return
       }
+      case 'behavior_warning': {
+        if (payload.warnings && payload.warnings.length > 0) {
+          setBehaviorWarning(payload.warnings.join(' '))
+          setTimeout(() => setBehaviorWarning(null), 5000)
+        }
+        return
+      }
       case 'pong':
       case 'interview_end': {
         return
@@ -171,7 +179,7 @@ export function InterviewRoom() {
     }
   }, [addMessage, appendStreamToken, clearStreamText, enqueueBase64, clearTtsQueue, messages, session, setStage, setSttPreview, setLlmStats, setTtsProvider, setTtsProviderLabel, ttsPlaying, ttsQueueSize])
 
-  const { sendCandidateMessage, sendAudioChunk, sendAudioEnd, sendInterrupt, connected } = useWebSocket({
+  const { sendCandidateMessage, sendAudioChunk, sendAudioEnd, sendInterrupt, sendBehaviorFrame, connected } = useWebSocket({
     sessionId,
     onMessage: handleSocketMessage,
   })
@@ -239,6 +247,17 @@ export function InterviewRoom() {
         return
       }
 
+      // Real-time feedback via WebSocket (for instant analysis response)
+      sendBehaviorFrame(
+        sample.frameSecond,
+        sample.eyeContactScore,
+        sample.headPoseScore,
+        sample.gazeX,
+        sample.gazeY,
+        sample.imageBase64,
+      )
+
+      // Batch persistence via HTTP
       void postBehavior(sessionId, {
         frames: [
           {
@@ -388,7 +407,7 @@ export function InterviewRoom() {
             eyeContactScore={mediaPipe.eyeContactScore}
             headPoseScore={mediaPipe.headPoseScore}
             expression={mediaPipe.expression}
-            warning={mediaPipe.warning}
+            warning={behaviorWarning ?? mediaPipe.warning}
           />
           <AudioVisualizer level={micLevel} active={isRecording} />
         </div>

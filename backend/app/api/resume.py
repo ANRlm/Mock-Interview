@@ -8,9 +8,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.resume_agent import ResumeAgent
+from app.api.dependencies import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models.session import InterviewSession
+from app.models.user import User  # noqa: F401
 from app.services.resume_service import (
     parse_resume,
     parse_resume_text,
@@ -27,6 +29,7 @@ async def upload_resume(
     session_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> dict[str, str]:
     session = await db.get(InterviewSession, session_id)
     if session is None:
@@ -64,7 +67,11 @@ async def upload_resume(
 
 
 @router.get("/{session_id}/resume")
-async def get_resume(session_id: UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_resume(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
     session = await db.get(InterviewSession, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")

@@ -5,13 +5,18 @@ import fs from 'node:fs'
 
 const certKeyPath = path.resolve(__dirname, './certs/dev-key.pem')
 const certPath = path.resolve(__dirname, './certs/dev-cert.pem')
+const useDevHttps = String(process.env.VITE_DEV_HTTPS ?? '').toLowerCase() === 'true'
 const hasHttpsCert = fs.existsSync(certKeyPath) && fs.existsSync(certPath)
-const httpsConfig = hasHttpsCert
+const httpsConfig = useDevHttps && hasHttpsCert
   ? {
       key: fs.readFileSync(certKeyPath),
       cert: fs.readFileSync(certPath),
     }
   : undefined
+
+if (useDevHttps && !hasHttpsCert) {
+  console.warn('VITE_DEV_HTTPS=true but dev cert is missing; fallback to HTTP.')
+}
 
 // https://vite.dev/config/
 export default defineConfig({

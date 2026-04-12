@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "Mock Interview API"
     API_V1_PREFIX: str = "/api"
 
+    JWT_SECRET: str = "change-this-in-production-use-env-var"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_HOURS: int = 24
+
     LLM_BASE_URL: str = "http://localhost:11434/v1"
     LLM_API_KEY: str = "ollama"
     LLM_MODEL: str = "qwen3.5:2b"

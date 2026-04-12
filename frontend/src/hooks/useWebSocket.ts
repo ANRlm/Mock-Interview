@@ -13,6 +13,7 @@ interface UseWebSocketResult {
   sendAudioChunk: (base64Pcm: string, sampleRate: number) => void
   sendAudioEnd: () => void
   sendInterrupt: (reason?: string) => void
+  sendBehaviorFrame: (frameSecond: number, eyeContactScore: number, headPoseScore: number, gazeX: number | null, gazeY: number | null, imageBase64: string | null) => void
   connected: boolean
   reconnectCount: number
 }
@@ -142,5 +143,34 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketParams): UseW
     )
   }, [])
 
-  return { sendCandidateMessage, sendAudioChunk, sendAudioEnd, sendInterrupt, connected, reconnectCount }
+  const sendBehaviorFrame = useCallback(
+    (
+      frameSecond: number,
+      eyeContactScore: number,
+      headPoseScore: number,
+      gazeX: number | null,
+      gazeY: number | null,
+      imageBase64: string | null,
+    ) => {
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        return
+      }
+
+      ws.send(
+        JSON.stringify({
+          type: 'behavior_frame',
+          frame_second: frameSecond,
+          eye_contact_score: eyeContactScore,
+          head_pose_score: headPoseScore,
+          gaze_x: gazeX,
+          gaze_y: gazeY,
+          image_base64: imageBase64,
+        }),
+      )
+    },
+    [],
+  )
+
+  return { sendCandidateMessage, sendAudioChunk, sendAudioEnd, sendInterrupt, sendBehaviorFrame, connected, reconnectCount }
 }

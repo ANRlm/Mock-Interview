@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.database import get_db
+from app.models.user import User  # noqa: F401
 from app.services.llm_profile_service import llm_profile_service
 
 router = APIRouter(prefix="/llm", tags=["llm-config"])
@@ -26,7 +28,9 @@ async def get_profiles(db: AsyncSession = Depends(get_db)) -> dict:
 
 @router.put("/runtime")
 async def update_runtime(
-    payload: LLMRuntimeUpdate, db: AsyncSession = Depends(get_db)
+    payload: LLMRuntimeUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> dict:
     try:
         return await llm_profile_service.update_runtime_profile(

@@ -128,6 +128,8 @@ services:
       TTS_HEDGE_ENABLED: "true"
       TTS_HEDGE_DELAY_SECONDS: 0.85
       TTS_HEDGE_MAX_RACERS: 2
+      CORS_ALLOW_ALL: "false"
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
     depends_on:
       - db
       - funasr

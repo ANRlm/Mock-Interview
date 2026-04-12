@@ -122,6 +122,7 @@ services:
       TTS_HEDGE_ENABLED: "true"
       TTS_HEDGE_DELAY_SECONDS: 0.85
       TTS_HEDGE_MAX_RACERS: 2
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
     depends_on:
       - funasr
       - cosyvoice2

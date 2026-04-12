@@ -88,3 +88,4 @@ export type WsServerMessage =
   | { type: 'interview_end'; reason: string }
   | { type: 'error'; code: string; message: string }
   | { type: 'pong' }
+  | { type: 'behavior_warning'; warnings: string[]; frame_second: number }
