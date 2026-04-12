@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from typing import cast
 
 from app.models.session import JobRole
+from app.config import settings
 from app.services.rag_service import rag_service
 from app.services.resume_service import build_resume_prompt
 
@@ -12,6 +13,33 @@ from .base_agent import BaseAgent
 
 class InterviewerAgent(BaseAgent):
     TASK_NAME = "interview"
+
+    def _truncate_rag_context(self, chunks: list[str]) -> str:
+        max_total = max(160, int(settings.LLM_INTERVIEW_RAG_MAX_CHARS))
+        max_chunk = max(80, int(settings.LLM_INTERVIEW_RAG_CHUNK_MAX_CHARS))
+
+        kept: list[str] = []
+        total = 0
+        for chunk in chunks:
+            text = (chunk or "").strip()
+            if not text:
+                continue
+            if len(text) > max_chunk:
+                text = text[:max_chunk].rstrip() + "…"
+
+            projected = total + len(text)
+            if kept:
+                projected += 2
+            if projected > max_total:
+                break
+
+            kept.append(text)
+            total = projected
+
+        if not kept:
+            return "无可用知识库上下文"
+
+        return "\n\n".join(kept)
 
     SYSTEM_PROMPT_TEMPLATE = """
 你是一位经验丰富的{job_role}领域面试官，名叫"Alex"。
@@ -46,11 +74,7 @@ class InterviewerAgent(BaseAgent):
         rag_context_chunks = await rag_service.search(
             job_role.value, query_source or job_role.value, top_k=3
         )
-        rag_context = (
-            "\n\n".join(rag_context_chunks)
-            if rag_context_chunks
-            else "无可用知识库上下文"
-        )
+        rag_context = self._truncate_rag_context(rag_context_chunks)
 
         system_prompt = self.SYSTEM_PROMPT_TEMPLATE.format(
             job_role=job_role.value,

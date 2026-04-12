@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     LLM_VERIFIER_PROFILE: str = ""
     LLM_VERIFIER_MODEL: str = ""
     LLM_ROUTING_STRATEGY: str = "balanced"
+    LLM_INTERVIEW_RAG_MAX_CHARS: int = 520
+    LLM_INTERVIEW_RAG_CHUNK_MAX_CHARS: int = 220
 
     CLOUD_LLM_ENABLED: bool = False
     CLOUD_LLM_BASE_URL: str = ""

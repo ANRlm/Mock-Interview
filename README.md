@@ -93,6 +93,7 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke --arti
 主要环境变量由 `docker-compose.gpu.yml` 注入：
 
 - `LLM_BASE_URL`、`LLM_MODEL`、`LLM_DISABLE_THINKING`
+- `LLM_INTERVIEW_RAG_MAX_CHARS`、`LLM_INTERVIEW_RAG_CHUNK_MAX_CHARS`（控制面试 RAG 上下文注入长度，降低首 token 抖动）
 - `FUNASR_BASE_URL`
 - `COSYVOICE_BASE_URL`、`COSYVOICE_TTS_PATH`、`COSYVOICE_MODE`、`COSYVOICE_SPEED`
 - `DATABASE_URL`、`CHROMA_DB_DIR`、`TTS_CACHE_DIR`

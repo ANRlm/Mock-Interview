@@ -14,6 +14,23 @@ import httpx
 import websockets
 
 
+def _disable_local_proxy_env() -> None:
+    proxy_keys = (
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "ws_proxy",
+        "wss_proxy",
+        "WS_PROXY",
+        "WSS_PROXY",
+    )
+    for key in proxy_keys:
+        os.environ.pop(key, None)
+
+
 def _ws_to_http_base(ws_base: str) -> str:
     if ws_base.startswith("ws://"):
         return "http://" + ws_base[5:]
@@ -70,8 +87,12 @@ def _save_wav(path: Path, b64_wav: str) -> None:
     path.write_bytes(raw)
 
 
+def _new_client(*, timeout: httpx.Timeout | float) -> httpx.AsyncClient:
+    return httpx.AsyncClient(timeout=timeout, trust_env=False)
+
+
 async def _create_session(api_base: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with _new_client(timeout=20.0) as client:
         response = await client.post(
             f"{api_base}/sessions",
             json={"job_role": "programmer", "sub_role": "frontend engineer"},
@@ -89,7 +110,7 @@ async def _upload_resume(api_base: str, session_id: str) -> dict[str, Any]:
             "text/plain",
         )
     }
-    async with httpx.AsyncClient(timeout=httpx.Timeout(240.0, connect=20.0)) as client:
+    async with _new_client(timeout=httpx.Timeout(240.0, connect=20.0)) as client:
         response = await client.post(
             f"{api_base}/sessions/{session_id}/resume",
             files=files,
@@ -109,6 +130,7 @@ async def _run_ws_round(
     current_response_id = ""
     tts_first_audio_seconds: float | None = None
     llm_start_at: float | None = None
+    first_llm_token_at: float | None = None
     tts_chunks = 0
     stt_partial = 0
     stt_final = ""
@@ -148,7 +170,10 @@ async def _run_ws_round(
                     current_response_id = rid
                 if rid and current_response_id and rid != current_response_id:
                     continue
-                llm_tokens.append(str(payload.get("token") or ""))
+                token = str(payload.get("token") or "")
+                if token and first_llm_token_at is None:
+                    first_llm_token_at = asyncio.get_running_loop().time()
+                llm_tokens.append(token)
             elif msg_type == "llm_done":
                 rid = str(payload.get("response_id") or "")
                 if rid and not current_response_id:
@@ -253,7 +278,7 @@ async def _run_ws_round(
 
 
 async def _generate_report(api_base: str, session_id: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _new_client(timeout=30.0) as client:
         trigger = await client.post(f"{api_base}/sessions/{session_id}/report")
         trigger.raise_for_status()
 
@@ -271,7 +296,7 @@ async def _generate_report(api_base: str, session_id: str) -> dict[str, Any]:
 
 
 async def _fetch_tts_metrics(api_base: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with _new_client(timeout=20.0) as client:
         response = await client.get(f"{api_base}/tts/metrics")
         response.raise_for_status()
         payload = response.json()
@@ -292,7 +317,7 @@ async def _fetch_tts_metrics(api_base: str) -> dict[str, Any]:
 
 
 async def _reset_tts_metrics(api_base: str) -> None:
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with _new_client(timeout=20.0) as client:
         response = await client.delete(f"{api_base}/tts/metrics")
         response.raise_for_status()
 
@@ -317,6 +342,8 @@ async def main() -> None:
     parser.add_argument("--reset-tts-metrics", action="store_true")
     args = parser.parse_args()
 
+    _disable_local_proxy_env()
+
     artifact_dir = Path(args.artifact_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -326,7 +353,7 @@ async def main() -> None:
     if http_health_base.endswith("/ws"):
         http_health_base = http_health_base[: -len("/ws")]
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with _new_client(timeout=20.0) as client:
         backend_health = await client.get(f"{http_health_base}/healthz")
         backend_health.raise_for_status()
 
