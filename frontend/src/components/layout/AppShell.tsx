@@ -43,7 +43,7 @@ export function AppShell() {
             </nav>
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">{user?.username}</span>
+                <span className="text-xs text-slate-400">{user?.email}</span>
                 <Button variant="ghost" size="sm" className="text-xs" onClick={logout}>
                   登出
                 </Button>

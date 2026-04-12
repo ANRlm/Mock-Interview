@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 export function RegisterPage() {
   const navigate = useNavigate()
   const register = useAuthStore((s) => s.register)
-  const [username, setUsername] = useState('')
+  const login = useAuthStore((s) => s.login)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -20,9 +20,8 @@ export function RegisterPage() {
     setError(null)
     setLoading(true)
     try {
-      await register(username, email, password)
-      // After register, log in automatically
-      await useAuthStore.getState().login(username, password)
+      await register(email, password)
+      await login(email, password)
       navigate('/setup')
     } catch (err) {
       if (err instanceof Error && 'detail' in err) {
@@ -45,12 +44,6 @@ export function RegisterPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Input
-                placeholder="用户名"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
               <Input
                 type="email"
                 placeholder="邮箱"

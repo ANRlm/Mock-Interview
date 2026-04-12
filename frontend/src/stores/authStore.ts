@@ -7,8 +7,8 @@ interface AuthState {
   token: string | null
   user: auth.User | null
   isAuthenticated: boolean
-  login: (username: string, password: string) => Promise<void>
-  register: (username: string, email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string) => Promise<void>
   logout: () => void
 }
 
@@ -19,8 +19,8 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
 
-      login: async (username: string, password: string) => {
-        const resp = await auth.login(username, password)
+      login: async (email: string, password: string) => {
+        const resp = await auth.login(email, password)
         set({
           token: resp.access_token,
           user: resp.user,
@@ -28,8 +28,8 @@ export const useAuthStore = create<AuthState>()(
         })
       },
 
-      register: async (username: string, email: string, password: string) => {
-        await auth.register(username, email, password)
+      register: async (email: string, password: string) => {
+        await auth.register(email, password)
       },
 
       logout: () => {

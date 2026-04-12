@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 export function LoginPage() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -19,10 +19,10 @@ export function LoginPage() {
     setError(null)
     setLoading(true)
     try {
-      await login(username, password)
+      await login(email, password)
       navigate('/setup')
     } catch (err) {
-      setError('用户名或密码错误')
+      setError('邮箱或密码错误')
     } finally {
       setLoading(false)
     }
@@ -39,9 +39,10 @@ export function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Input
-                placeholder="用户名"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                placeholder="邮箱"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
               <Input

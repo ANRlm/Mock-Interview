@@ -16,19 +16,17 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=80)
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
 
 
 class RegisterResponse(BaseModel):
     id: str
-    username: str
     email: str
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=1)
+    email: EmailStr
     password: str = Field(min_length=1)
 
 
@@ -41,32 +39,31 @@ class LoginResponse(BaseModel):
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> RegisterResponse:
     existing = await db.execute(
-        select(User).where((User.username == payload.username) | (User.email == payload.email))
+        select(User).where(User.email == payload.email)
     )
     if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=409, detail="Username or email already registered")
+        raise HTTPException(status_code=409, detail="Email already registered")
 
     user = User(
-        username=payload.username,
         email=payload.email,
         hashed_password=hash_password(payload.password),
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return RegisterResponse(id=str(user.id), username=user.username, email=user.email)
+    return RegisterResponse(id=str(user.id), email=user.email)
 
 
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> LoginResponse:
-    result = await db.execute(select(User).where(User.username == payload.username))
+    result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token(data={"sub": str(user.id)})
     return LoginResponse(
         access_token=token,
-        user=RegisterResponse(id=str(user.id), username=user.username, email=user.email),
+        user=RegisterResponse(id=str(user.id), email=user.email),
     )
