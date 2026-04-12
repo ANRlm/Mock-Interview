@@ -130,10 +130,13 @@ class LLMProfileService:
         return config
 
     async def _ensure_schema_columns(self, db: AsyncSession) -> None:
-        result = await db.execute(text("PRAGMA table_info(llm_runtime_config)"))
-        columns = {str(row[1]) for row in result.fetchall()}
-        if not columns:
-            return
+        result = await db.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'llm_runtime_config'"
+            )
+        )
+        columns = {str(row[0]) for row in result.fetchall()}
 
         if "routing_strategy" not in columns:
             await db.execute(
