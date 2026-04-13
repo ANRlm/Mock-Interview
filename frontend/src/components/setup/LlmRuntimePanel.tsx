@@ -35,25 +35,25 @@ export function LlmRuntimePanel() {
 
   useEffect(() => {
     let disposed = false
-    setState((prev) => ({ ...prev, loading: true, error: null }))
-    getLLMProfiles()
-      .then((data) => {
-        if (disposed) {
-          return
-        }
+
+    async function fetchData() {
+      try {
+        setState((prev) => ({ ...prev, loading: true, error: null }))
+        const data = await getLLMProfiles()
+        if (disposed) return
         setState({ loading: false, saving: false, error: null, data })
         setLlmProfile(data.active_profile)
         setLlmModel(data.active_model ?? data.active_runtime.model)
         setLlmDisableThinking(data.active_runtime.disable_thinking)
         setLlmRoutingStrategy(data.routing_strategy)
-      })
-      .catch((error: unknown) => {
-        if (disposed) {
-          return
-        }
+      } catch (error) {
+        if (disposed) return
         const message = error instanceof Error ? error.message : '读取 LLM 配置失败'
         setState({ loading: false, saving: false, error: message, data: null })
-      })
+      }
+    }
+
+    fetchData()
 
     return () => {
       disposed = true

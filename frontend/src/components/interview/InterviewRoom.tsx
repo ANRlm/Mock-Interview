@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Mic, MicOff, Send } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
@@ -184,6 +184,11 @@ export function InterviewRoom() {
     onMessage: handleSocketMessage,
   })
 
+  const sendBehaviorFrameRef = useRef(sendBehaviorFrame)
+  useLayoutEffect(() => {
+    sendBehaviorFrameRef.current = sendBehaviorFrame
+  }, [sendBehaviorFrame])
+
   const mediaPipe = useMediaPipe()
 
   const interruptPlayback = useCallback(
@@ -248,7 +253,7 @@ export function InterviewRoom() {
       }
 
       // Real-time feedback via WebSocket (for instant analysis response)
-      sendBehaviorFrame(
+      sendBehaviorFrameRef.current(
         sample.frameSecond,
         sample.eyeContactScore,
         sample.headPoseScore,
@@ -285,8 +290,6 @@ export function InterviewRoom() {
       return
     }
 
-    setMicDenied(false)
-    setMicWarningText(null)
     start().catch((error) => {
       setMicDenied(true)
 
@@ -304,7 +307,7 @@ export function InterviewRoom() {
       setInputMode('text')
       setStage('idle')
     })
-  }, [recorderEnabled, setInputMode, setStage, start, stop])
+  }, [recorderEnabled, setInputMode, setStage, start, stop, currentOrigin])
 
   const turnCount = useMemo(() => messages.filter((msg) => msg.role === 'candidate').length, [messages])
 

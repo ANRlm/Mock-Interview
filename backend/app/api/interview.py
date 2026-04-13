@@ -4,12 +4,11 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
+from app.core.limiter import rate_limiter as limiter
 from app.database import get_db
 from app.models.message import ConversationMessage
 from app.models.session import InterviewSession, SessionStatus
@@ -17,7 +16,6 @@ from app.models.user import User
 from app.schemas import MessageRead, SessionCreate, SessionRead, SessionUpdate
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("", response_model=SessionRead, status_code=status.HTTP_201_CREATED)
@@ -26,9 +24,10 @@ async def create_session(
     request: Request,
     payload: SessionCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionRead:
     session = InterviewSession(
+        user_id=current_user.id,
         job_role=payload.job_role,
         sub_role=payload.sub_role,
         status=SessionStatus.setup,

@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
+
+from app.core.limiter import rate_limiter as limiter
 
 from app.api.auth import router as auth_router
 from app.api.behavior import router as behavior_router
@@ -21,7 +22,6 @@ from app.database import init_db
 from app.startup import run_startup_tasks
 from app.ws.interview_ws import router as interview_ws_router
 
-limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager

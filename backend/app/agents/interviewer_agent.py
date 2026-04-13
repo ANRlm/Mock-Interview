@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from typing import cast
 
@@ -9,6 +10,8 @@ from app.services.rag_service import rag_service
 from app.services.resume_service import build_resume_prompt
 
 from .base_agent import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 
 class InterviewerAgent(BaseAgent):
@@ -96,7 +99,11 @@ class InterviewerAgent(BaseAgent):
                 yield token
             if not captured.strip():
                 yield self._fallback_question(job_role, turn_count)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "InterviewerAgent.stream_next_question failed, using fallback: %s",
+                exc
+            )
             yield self._fallback_question(job_role, turn_count)
 
     def _resolve_phase(self, turn_count: int) -> str:

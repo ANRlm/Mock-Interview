@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import time
 import uuid
 from contextlib import suppress
@@ -126,6 +127,8 @@ async def interview_socket(
 
     await websocket.accept()
 
+    user_id = payload.get("sub")
+
     async with AsyncSessionLocal() as db:
         session = await db.get(InterviewSession, session_id)
         if session is None:
@@ -137,6 +140,17 @@ async def interview_socket(
                 }
             )
             await websocket.close(code=4404)
+            return
+
+        if str(session.user_id) != user_id:
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "code": "FORBIDDEN",
+                    "message": "You don't have access to this session",
+                }
+            )
+            await websocket.close(code=4403)
             return
 
     runtime = SessionRuntime(
@@ -798,7 +812,8 @@ def _split_sentence_for_tts(sentence: str, *, first_segment: bool) -> list[str]:
     return [seg for seg in segments if seg]
 
 
-_BEHAVIOR_WARNING_COOLDOWN = 10.0  # seconds between warnings
+_BEHAVIOR_WARNING_COOLDOWN = 10.0
+_behavior_warning_last_sent: dict[str, float] = {}
 
 
 async def _handle_behavior_frame(
@@ -841,7 +856,6 @@ async def _handle_behavior_frame(
         if head_pose < 0.50:
             warnings.append("头部倾斜较大，请保持正面面对镜头")
         if gaze_x is not None and gaze_y is not None:
-            import math
             gaze_dist = math.sqrt(gaze_x ** 2 + gaze_y ** 2)
             if gaze_dist > 0.35:
                 warnings.append("视线偏移较多，请注视镜头方向")
@@ -849,10 +863,14 @@ async def _handle_behavior_frame(
             warnings.append("表情偏消极，请保持更积极的面部状态")
 
         if warnings:
-            await runtime.send_json({
-                "type": "behavior_warning",
-                "warnings": warnings,
-                "frame_second": frame_second,
-            })
+            now = time.time()
+            last_sent = _behavior_warning_last_sent.get(session_id, 0)
+            if now - last_sent >= _BEHAVIOR_WARNING_COOLDOWN:
+                _behavior_warning_last_sent[session_id] = now
+                await runtime.send_json({
+                    "type": "behavior_warning",
+                    "warnings": warnings,
+                    "frame_second": frame_second,
+                })
     except Exception as exc:
         logger.warning("Behavior frame analysis failed session=%s: %s", session_id, exc)

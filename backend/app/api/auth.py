@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import time
+from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,20 @@ from app.database import get_db
 from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-limiter = Limiter(key_func=get_remote_address)
+
+# Simple IP-based rate limiting for login (5 attempts per minute per IP)
+_loginAttempts: dict[str, list[float]] = defaultdict(list)
+
+def _check_rate_limit(ip: str, max_attempts: int = 5, window: int = 60) -> None:
+    now = time.time()
+    # Clean old entries
+    _loginAttempts[ip] = [t for t in _loginAttempts[ip] if now - t < window]
+    if len(_loginAttempts[ip]) >= max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later."
+        )
+    _loginAttempts[ip].append(now)
 
 
 class RegisterRequest(BaseModel):
@@ -55,8 +68,9 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login", response_model=LoginResponse)
-@limiter.limit("5/minute")
 async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> LoginResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):

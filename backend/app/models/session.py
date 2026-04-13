@@ -4,8 +4,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, JSON, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, Enum, ForeignKey, JSON, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -27,6 +27,10 @@ class InterviewSession(Base):
     __tablename__ = "interview_sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user: Mapped["User"] = relationship("User", lazy="joined")
     job_role: Mapped[JobRole] = mapped_column(Enum(JobRole), nullable=False)
     sub_role: Mapped[str | None] = mapped_column(String(120), nullable=True)
     resume_path: Mapped[str | None] = mapped_column(String(255), nullable=True)

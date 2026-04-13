@@ -21,7 +21,7 @@ export function LoginPage() {
     try {
       await login(email, password)
       navigate('/setup')
-    } catch (err) {
+    } catch {
       setError('邮箱或密码错误')
     } finally {
       setLoading(false)
