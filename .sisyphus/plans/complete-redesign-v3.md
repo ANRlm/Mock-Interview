@@ -1,5 +1,22 @@
 # Mock Interview 彻底重构计划
 
+## TODOs
+
+- [x] T1: 安装 Framer Motion + Lottie 依赖
+- [x] T2: 创建 Framer Motion 动画组件库
+- [x] T3: 重构首页：Hero + 功能介绍 + 技术栈
+- [x] T4: 添加 Lottie 动画装饰
+- [x] T5: 创建 RoleSelector 组件
+- [x] T6: 创建 ResumeUploader 拖拽组件
+- [x] T7: 创建 ModelSelector + SpeedSlider
+- [x] T8: 简化 NavBar，移除面试入口
+- [x] T9: 更新路由配置
+- [x] T10: 面试页微调
+- [ ] T11: 评估并测试 SenseVoice STT
+- [ ] T12: 优化 CosyVoice2 流式输出
+- [ ] T13: LLM 模型升级测试
+- [ ] T14: 全双工流水线调优
+
 ## TL;DR
 
 > **Summary**: 彻底重构前端（精美首页 + 易用配置）+ 后端性能优化（实时通话）
