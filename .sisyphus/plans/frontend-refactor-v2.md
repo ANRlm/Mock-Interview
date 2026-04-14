@@ -155,7 +155,7 @@
 
 ## TODOs
 
-- [ ] 1. 项目结构重建
+- [x] 1. 项目结构重建
 
   **What to do**:
   - 创建 `src/` 目录结构：
@@ -181,7 +181,7 @@
   - Routing: React Router v6
   - State: Zustand
 
-- [ ] 2. Tailwind 配置
+- [x] 2. Tailwind 配置
 
   **What to do**:
   ```typescript
@@ -228,7 +228,7 @@
   - Geist Colors: https://vercel.com/geist/colors
   - Geist Typography: https://vercel.com/geist/typography
 
-- [ ] 3. CSS 变量层
+- [x] 3. CSS 变量层
 
   **What to do**:
   ```css
@@ -282,7 +282,7 @@
   - Geist Theme Switcher: https://vercel.com/geist/theme-switcher
   - Vercel Guidelines dark mode: https://vercel.com/design/guidelines
 
-- [ ] 4. 基础 UI 组件
+- [x] 4. 基础 UI 组件
 
   **What to do**:
   创建 `src/components/ui/`:
@@ -303,7 +303,7 @@
   **References**:
   - Geist Button: https://vercel.com/geist/button
 
-- [ ] 5. 布局组件
+- [x] 5. 布局组件
 
   **What to do**:
   创建 `src/components/layout/`:
@@ -315,7 +315,7 @@
   **References**:
   - Vercel Nav patterns
 
-- [ ] 6. 登录/注册页
+- [x] 6. 登录/注册页
 
   **What to do**:
   创建 `src/pages/LoginPage.tsx`:
@@ -333,7 +333,7 @@
   **References**:
   - Auth API: backend/app/api/auth.py
 
-- [ ] 7. 首页
+- [x] 7. 首页
 
   **What to do**:
   创建 `src/pages/HomePage.tsx`:
@@ -349,7 +349,7 @@
   **References**:
   - Sessions API: backend/app/api/interview.py
 
-- [ ] 8. 配置页
+- [x] 8. 配置页
 
   **What to do**:
   创建 `src/pages/SetupPage.tsx`:
@@ -373,7 +373,7 @@
   - Resume API: backend/app/api/resume.py
   - LLM Config API: backend/app/api/llm_config.py
 
-- [ ] 9. 面试页 (核心)
+- [x] 9. 面试页 (核心)
 
   **What to do**:
   创建 `src/pages/InterviewPage.tsx`:
@@ -411,7 +411,7 @@
   - WebSocket: backend/app/ws/interview_ws.py
   - Backend hooks: useWebSocket.ts pattern
 
-- [ ] 10. 报告页
+- [x] 10. 报告页
 
   **What to do**:
   创建 `src/pages/ReportPage.tsx`:
@@ -434,7 +434,7 @@
   **References**:
   - Report API: backend/app/api/report.py
 
-- [ ] 11. WebSocket Hook
+- [x] 11. WebSocket Hook
 
   **What to do**:
   创建 `src/hooks/useInterviewWebSocket.ts`:
@@ -454,7 +454,7 @@
   - 音频 chunk 回调
   - VAD (语音活动检测) 支持
 
-- [ ] 12. Text-First Mode
+- [x] 12. Text-First Mode
 
   **What to do**:
   - LLM 回复后不自动 TTS，显示 "朗读" 按钮
@@ -470,7 +470,7 @@
   - stop()
   - status: idle/playing
 
-- [ ] 13. Voice-First Mode
+- [x] 13. Voice-First Mode
 
   **What to do**:
   - 切换到 Voice 模式 → 连接独立 /ws/stt 和 /ws/tts
@@ -486,7 +486,7 @@
   - 模式切换逻辑
   - Voice 模式: 隐藏 Textarea, 显示实时波形
 
-- [ ] 14. PiP 姿态检测
+- [x] 14. PiP 姿态检测
 
   **What to do**:
   创建 `src/components/interview/PosePip.tsx`:
@@ -504,7 +504,7 @@
   **References**:
   - PosePip 原实现参考
 
-- [ ] 15. 集成测试 + Git Commit
+- [x] 15. 集成测试 + Git Commit
 
   **What to do**:
   - TypeScript 类型检查: `npx tsc --noEmit --skipLibCheck`
@@ -516,10 +516,10 @@
 
 ## Final Verification Wave
 
-- [ ] F1. Plan Compliance Audit
-- [ ] F2. Code Quality Review
-- [ ] F3. Real Manual QA
-- [ ] F4. Scope Fidelity Check
+- [x] F1. Plan Compliance Audit
+- [x] F2. Code Quality Review
+- [x] F3. Real Manual QA
+- [x] F4. Scope Fidelity Check
 
 ---
 

@@ -72,10 +72,11 @@ Tested and confirmed:
   - Early flush thresholds
 - **Assessment**: Well-tuned already; further optimization requires smoke test data
 
-### T13: LLM Model Upgrade (qwen3.5:2b → qwen3:8b)
-- Requires: `ollama pull qwen3:8b` (8GB+ download)
-- docker-compose change: `LLM_MODEL: qwen3:8b`
-- **Assessment**: Needs manual intervention to pull model + restart containers
+### T13: LLM Model Upgrade (qwen3.5:2b → qwen3:8b) ✅ COMPLETED
+- Model qwen3:8b (5.2 GB) pulled successfully
+- docker-compose.gpu.yml updated: `LLM_MODEL: qwen3:8b` in both backend env and ollama_init
+- Containers restarted: backend healthy at http://127.0.0.1:8000/healthz
+- Verification: `ollama list` shows qwen3:8b available
 
 ### T14: Full-Duplex Pipeline Tuning
 - Architecture is already full-duplex
@@ -117,3 +118,16 @@ docker-compose -f docker-compose.gpu.yml restart ollama backend
 ```bash
 docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke --runs 3 --reset-tts-metrics
 ```
+## Research findings: SenseVoice Docker options and compatibility
+- Public Docker image: yiminger/sensevoice on Docker Hub. Permalink: https://hub.docker.com/r/yiminger/sensevoice
+  - Description indicates it is a SenseVoice fastpi encapsulation using ONNX with CPU and quantized models.
+- Alternative Docker-based SenseVoice ASR: youyouhe/sensevoice-asr-docker on GitHub. Permalinks: https://github.com/youyouhe/sensevoice-asr-docker and DOCKER_GUIDE.md shows REST API at POST /asr and port 5001.
+  - Evidence: DOCKER_GUIDE.md example with API test: POST http://localhost:5001/asr -F file -F lang
+- Official SenseVoice repository (FunAudioLLM) provides Docker-based deployment (Docker Compose, Dockerfile).
+  - Docker Compose: https://github.com/FunAudioLLM/SenseVoice/blob/main/docker-compose.yaml
+  - Dockerfile: https://github.com/FunAudioLLM/SenseVoice/blob/main/Dockerfile
+- Current FunASR WS-based STT is wired to port 10095 (WS) and 10096 (HTTP fallback) as seen in stt_service.py: it connects to a WebSocket and sends init payloads for streaming recognition.
+  - Evidence: FunASR WS API examples at https://github.com/modelscope/FunASR/blob/main/runtime/python/websocket/funasr_wss_server.py and client usage examples at https://github.com/modelscope/FunASR/blob/main/runtime/python/websocket/funasr_wss_client.py
+- SenseVoice REST API: https://github.com/youyouhe/sensevoice-asr-docker; API docs show POST /asr with file and lang, Swagger UI at /docs
+- Core finding: There is public SenseVoice Docker support, but it is not a WS API compatibility drop-in for FunASR; a switch would require backend changes (e.g., to call HTTP /asr or implement a WS->HTTP adapter).
+- Next steps: I can draft concrete code patches for a SenseVoice adapter layer if you want to proceed.
