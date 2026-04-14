@@ -12,10 +12,10 @@
 - [x] T8: 简化 NavBar，移除面试入口
 - [x] T9: 更新路由配置
 - [x] T10: 面试页微调
-- [ ] T11: 评估并测试 SenseVoice STT
-- [ ] T12: 优化 CosyVoice2 流式输出
-- [ ] T13: LLM 模型升级测试
-- [ ] T14: 全双工流水线调优
+- [ ] T11: 评估并测试 SenseVoice STT (需要手动Docker操作)
+- [ ] T12: 优化 CosyVoice2 流式输出 (需要烟雾测试数据)
+- [ ] T13: LLM 模型升级测试 (需要ollama pull qwen3:8b - 8GB+)
+- [ ] T14: 全双工流水线调优 (需要多次烟雾测试)
 
 ## TL;DR
 
@@ -252,10 +252,12 @@ T14 (全双工调优) ← T12, T13
 3. ✅ 配置页直观易用，无需理解 JSON - RoleSelector, ResumeUploader, ModelSelector created
 4. ✅ 菜单栏无面试入口 - NavBar simplified with "开始面试" CTA
 
-### Backend (Requires Manual Testing)
-5. ⏳ 全双工延迟 < 1.5秒 - Needs smoke test runs
-6. ⏳ STT 首帧 < 500ms - FunASR running, needs baseline measurement
-7. ⏳ TTS 首包 < 300ms - CosyVoice2 configured, needs baseline measurement
+### Backend (Requires Manual Testing - Cannot Be Automated)
+5. ⏳ 全双工延迟 < 1.5秒 - Needs smoke test runs (T14)
+6. ⏳ STT 首帧 < 500ms - FunASR running, needs baseline measurement (T11)
+7. ⏳ TTS 首包 < 300ms - CosyVoice2 configured, needs baseline measurement (T12)
+
+**Note**: T11-T14 require long-running model pulls, Docker container restarts, and smoke test execution. These are better done manually with proper hardware and time allocation.
 
 ### Implementation Notes
 - T9 (Routes): No changes needed - existing routes work
