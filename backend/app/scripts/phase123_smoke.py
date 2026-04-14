@@ -95,11 +95,11 @@ def _new_client(*, timeout: httpx.Timeout | float, token: str | None = None) -> 
     return httpx.AsyncClient(timeout=timeout, trust_env=False, headers=headers)
 
 
-async def _login(api_base: str, username: str, password: str) -> str:
+async def _login(api_base: str, email: str, password: str) -> str:
     async with _new_client(timeout=20.0) as client:
         response = await client.post(
             f"{api_base}/auth/login",
-            json={"username": username, "password": password},
+            json={"email": email, "password": password},
         )
         response.raise_for_status()
         data = response.json()
@@ -356,7 +356,7 @@ async def main() -> None:
         default=float(os.getenv("SMOKE_WS_RECV_TIMEOUT_SECONDS", "120")),
     )
     parser.add_argument("--reset-tts-metrics", action="store_true")
-    parser.add_argument("--username", default=os.getenv("SMOKE_USERNAME", "smoketest"))
+    parser.add_argument("--email", default=os.getenv("SMOKE_EMAIL", "smoketest@test.local"))
     parser.add_argument("--password", default=os.getenv("SMOKE_PASSWORD", "smoketest123"))
     parser.add_argument("--register", action="store_true", help="Register the test user if not exists")
     args = parser.parse_args()
@@ -382,22 +382,21 @@ async def main() -> None:
                 reg_resp = await client.post(
                     f"{api_base}/auth/register",
                     json={
-                        "username": args.username,
-                        "email": f"{args.username}@test.local",
+                        "email": args.email,
                         "password": args.password,
                     },
                 )
                 if reg_resp.status_code == 201:
-                    print(f"Registered new user: {args.username}", file=sys.stderr)
+                    print(f"Registered: {args.email}", file=sys.stderr)
                 elif reg_resp.status_code == 409:
-                    print(f"User already exists: {args.username}", file=sys.stderr)
+                    print(f"Already registered: {args.email}", file=sys.stderr)
                 else:
                     reg_resp.raise_for_status()
             except Exception as exc:
                 print(f"Registration warning: {exc}", file=sys.stderr)
 
-    token = await _login(api_base, args.username, args.password)
-    print(f"Authenticated as: {args.username}", file=sys.stderr)
+    token = await _login(api_base, args.email, args.password)
+    print(f"Authenticated as: {args.email}", file=sys.stderr)
 
     if args.reset_tts_metrics:
         await _reset_tts_metrics(api_base, token)
