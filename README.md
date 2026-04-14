@@ -8,7 +8,7 @@
 |------|------|
 | 实时语音面试 | WebSocket 双向通信，支持文本与音频实时交互 |
 | 语音识别 (STT) | FunASR 2-pass 模型，高精度中文语音转文本 |
-| 智能问答 (LLM) | Ollama qwen3.5:2b，本地 GPU 加速推理 |
+| 智能问答 (LLM) | Ollama qwen3:8b，本地 GPU 加速推理 |
 | 语音合成 (TTS) | CosyVoice2，流式音频输出，已适配 RTX 50 系列 |
 | 简历解析 | PDF/图片上传，结构化提取关键信息 |
 | 面试报告 | 多维度评估（内容质量、流畅度、行为分析） |
@@ -35,7 +35,7 @@
 
 ### AI/ML
 
-- LLM: Ollama (qwen3.5:2b)
+- LLM: Ollama (qwen3:8b)
 - STT: FunASR (Paraformer-large) / SenseVoice
 - TTS: CosyVoice2
 - Embedding: BAAI/bge-m3
@@ -219,7 +219,7 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
 | `JWT_SECRET` | JWT 签名密钥（生产环境必设） | - |
 | `DATABASE_URL` | 数据库连接字符串 | sqlite+aiosqlite:///./mock_interview.db |
 | `LLM_BASE_URL` | Ollama API 地址 | http://localhost:11434/v1 |
-| `LLM_MODEL` | LLM 模型名称 | qwen3.5:2b |
+| `LLM_MODEL` | LLM 模型名称 | qwen3:8b |
 | `LLM_DISABLE_THINKING` | 禁用思考过程 | true |
 | `FUNASR_BASE_URL` | FunASR API 地址 | http://127.0.0.1:10095 |
 | `COSYVOICE_BASE_URL` | CosyVoice API 地址 | http://127.0.0.1:50000 |
@@ -266,7 +266,7 @@ docker compose -f docker-compose.gpu.yml up -d frontend
          │               │                      │
     ┌────▼────┐    ┌─────▼─────┐    ┌────────▼────────┐
     │ SQLite/ │    │  Ollama   │    │  FunASR /      │
-    │PostgreSQL│   │ qwen3.5:2b│    │  SenseVoice    │
+    │PostgreSQL│   │ qwen3:8b │    │  SenseVoice    │
     │ sessions│    │    GPU    │    │      (STT)      │
     │ messages│    └───────────┘    └────────┬────────┘
     │ reports │                        ┌─────▼────────┐
