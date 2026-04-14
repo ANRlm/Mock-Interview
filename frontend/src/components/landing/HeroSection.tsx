@@ -3,34 +3,67 @@
 import { motion } from 'framer-motion'
 import Lottie from 'lottie-react'
 import { useEffect, useState } from 'react'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 
-const defaultOptions = {
-  loop: true,
-  autoplay: true,
+const ANIMATION_URL = 'https://assets2.lottiefiles.com/packages/lf20_jcikwtux.json'
+
+function AnimatedPlaceholder() {
+  return (
+    <div className="w-80 h-80 relative">
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
+      <div className="absolute inset-8 rounded-full bg-gradient-to-br from-primary/10 to-transparent animate-pulse" />
+    </div>
+  )
 }
 
-function HeroAnimation() {
+function HeroAnimationInner() {
   const [animationData, setAnimationData] = useState<object | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
-    fetch('https://assets2.lottiefiles.com/packages/lf20_jcikwtux.json')
-      .then((res) => res.json())
-      .then((data) => setAnimationData(data))
-      .catch(() => {})
+    let cancelled = false
+
+    fetch(ANIMATION_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch animation')
+        return res.json()
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setAnimationData(data)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  if (!animationData) {
-    return (
-      <div className="w-80 h-80 relative">
-        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-neutral-200 to-neutral-300 animate-pulse" />
-      </div>
-    )
+  if (error || !animationData) {
+    return <AnimatedPlaceholder />
   }
 
   return (
     <div className="w-80 h-80">
-      <Lottie {...defaultOptions} animationData={animationData} />
+      <LottieAnimation animationData={animationData} />
     </div>
+  )
+}
+
+function LottieAnimation({ animationData }: { animationData: object }) {
+  return <Lottie loop autoplay animationData={animationData} rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }} />
+}
+
+function HeroAnimationWithError() {
+  return (
+    <ErrorBoundary fallback={<AnimatedPlaceholder />}>
+      <HeroAnimationInner />
+    </ErrorBoundary>
   )
 }
 
@@ -110,7 +143,7 @@ export function HeroSection() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.2 }}
         >
-          <HeroAnimation />
+          <HeroAnimationWithError />
         </motion.div>
       </div>
 
