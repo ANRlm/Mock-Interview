@@ -51,14 +51,14 @@ export function ResumeUploader({ file, onFileChange, disabled = false }: ResumeU
       <CardContent className="space-y-3">
         <input ref={inputRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleInputChange} />
 
-        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+        <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
           {file ? (
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                <FileText size={16} className="text-blue-300" />
+                <FileText size={16} className="text-neutral-400" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-slate-100">{file.name}</p>
-                  <p className="text-xs text-slate-400">{toReadableSize(file.size)}</p>
+                  <p className="truncate text-sm text-neutral-100">{file.name}</p>
+                  <p className="text-xs text-neutral-400">{toReadableSize(file.size)}</p>
                 </div>
               </div>
               <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={clearFile}>
@@ -66,7 +66,7 @@ export function ResumeUploader({ file, onFileChange, disabled = false }: ResumeU
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-slate-400">未选择文件，可跳过直接开始面试。</p>
+            <p className="text-xs text-neutral-400">未选择文件，可跳过直接开始面试。</p>
           )}
         </div>
 

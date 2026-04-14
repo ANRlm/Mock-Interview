@@ -101,8 +101,8 @@ export function LlmRuntimePanel() {
         <CardDescription>支持本地/云端两档切换，可实时生效到后续轮次。</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {state.loading ? <p className="text-xs text-slate-400">正在读取配置...</p> : null}
-        {state.error ? <p className="text-xs text-rose-300">{state.error}</p> : null}
+        {state.loading ? <p className="text-xs text-neutral-400">正在读取配置...</p> : null}
+        {state.error ? <p className="text-xs text-rose-400">{state.error}</p> : null}
 
         <div className="grid gap-2 md:grid-cols-2">
           {(['local', 'cloud'] as const).map((profile) => {
@@ -116,7 +116,7 @@ export function LlmRuntimePanel() {
                 type="button"
                 disabled={!enabled || state.saving}
                 className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                  active ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
+                  active ? 'border-neutral-500 bg-neutral-800/80' : 'border-neutral-800 bg-neutral-950/40 hover:border-neutral-700'
                 } ${!enabled ? 'cursor-not-allowed opacity-45' : ''}`}
                 onClick={() => {
                   setLlmProfile(profile)
@@ -125,15 +125,15 @@ export function LlmRuntimePanel() {
                   }
                 }}
               >
-                <p className="font-medium text-slate-100">{info?.label ?? profile}</p>
-                <p className="mt-1 text-xs text-slate-400">{enabled ? `默认模型: ${info?.defaultModel || '-'}` : '当前未启用'}</p>
+                <p className="font-medium text-neutral-100">{info?.label ?? profile}</p>
+                <p className="mt-1 text-xs text-neutral-400">{enabled ? `默认模型: ${info?.defaultModel || '-'}` : '当前未启用'}</p>
               </button>
             )
           })}
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs text-slate-400">任务路由策略</p>
+          <p className="text-xs text-neutral-400">任务路由策略</p>
           <div className="grid gap-2 md:grid-cols-3">
             {(state.data?.routing_strategies ?? []).map((item) => (
               <button
@@ -143,19 +143,19 @@ export function LlmRuntimePanel() {
                 onClick={() => setLlmRoutingStrategy(item.name)}
                 className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
                   llmRoutingStrategy === item.name
-                    ? 'border-cyan-400 bg-cyan-400/10'
-                    : 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
+                    ? 'border-neutral-500 bg-neutral-800/80'
+                    : 'border-neutral-800 bg-neutral-950/40 hover:border-neutral-700'
                 }`}
               >
-                <p className="font-medium text-slate-100">{item.label}</p>
-                <p className="mt-1 text-slate-400">{item.description}</p>
+                <p className="font-medium text-neutral-100">{item.label}</p>
+                <p className="mt-1 text-neutral-400">{item.description}</p>
               </button>
             ))}
           </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs text-slate-400">模型名称（可选覆盖）</p>
+          <p className="text-xs text-neutral-400">模型名称（可选覆盖）</p>
           <Input
             value={llmModel}
             onChange={(event) => setLlmModel(event.target.value)}
@@ -164,7 +164,7 @@ export function LlmRuntimePanel() {
           />
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-slate-300">
+        <label className="flex items-center gap-2 text-xs text-neutral-300">
           <input
             type="checkbox"
             checked={llmDisableThinking}
@@ -184,9 +184,9 @@ export function LlmRuntimePanel() {
         </div>
 
         {state.data?.task_routes ? (
-          <div className="space-y-2 rounded-md border border-slate-800 bg-slate-950/50 p-3">
-            <p className="text-xs uppercase tracking-widest text-slate-400">任务级路由预览</p>
-            <div className="grid gap-2 text-xs text-slate-300">
+          <div className="space-y-2 rounded-md border border-neutral-800 bg-neutral-950/50 p-3">
+            <p className="text-xs uppercase tracking-widest text-neutral-400">任务级路由预览</p>
+            <div className="grid gap-2 text-xs text-neutral-300">
               {Object.entries(state.data.task_routes).map(([task, route]) => (
                 <p key={task}>
                   {task}: {route.profile} / {route.model || '-'} / thinking {route.disable_thinking ? 'off' : 'on'}

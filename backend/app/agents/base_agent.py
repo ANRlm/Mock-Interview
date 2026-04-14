@@ -295,11 +295,13 @@ class BaseAgent:
                         continue
 
                     message = data.get("message") if isinstance(data, dict) else None
-                    token = (
-                        (message or {}).get("content")
-                        if isinstance(message, dict)
-                        else ""
-                    )
+                    if isinstance(message, dict):
+                        # qwen3.5 puts thinking in separate field; yield both content and thinking
+                        content_token = message.get("content") or ""
+                        thinking_token = message.get("thinking") or ""
+                        token = content_token if content_token else thinking_token
+                    else:
+                        token = ""
                     if token:
                         yield token
 

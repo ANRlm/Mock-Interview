@@ -36,7 +36,7 @@ export function RegisterPage() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="w-full max-w-sm border-slate-800 bg-slate-900/60">
+      <Card className="w-full max-w-sm border-neutral-800 bg-neutral-900/60">
         <CardHeader>
           <CardTitle>注册</CardTitle>
           <CardDescription>创建新账号开始模拟面试</CardDescription>
@@ -59,14 +59,14 @@ export function RegisterPage() {
                 required
               />
             </div>
-            {error && <p className="text-sm text-rose-300">{error}</p>}
+            {error && <p className="text-sm text-rose-400">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? '注册中...' : '注册'}
             </Button>
           </form>
-          <p className="mt-4 text-center text-sm text-slate-400">
+          <p className="mt-4 text-center text-sm text-neutral-400">
             已有账号？{' '}
-            <Link to="/login" className="text-blue-300 hover:text-blue-200">
+            <Link to="/login" className="text-neutral-400 hover:text-neutral-200">
               登录
             </Link>
           </p>

@@ -20,12 +20,12 @@ export function AudioVisualizer({ level, active }: AudioVisualizerProps) {
         <CardTitle className="text-base">音频波形</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex h-20 items-end gap-1 rounded-lg border border-slate-800 bg-slate-950/80 p-3">
+        <div className="flex h-20 items-end gap-1 rounded-lg border border-neutral-800 bg-neutral-950/80 p-3">
           {bars.map((height, index) => (
             <span
               key={index}
-              className={`w-full rounded-sm bg-gradient-to-t transition-all duration-100 ${
-                active ? 'from-blue-500/80 to-cyan-300' : 'from-slate-700 to-slate-500'
+              className={`w-full rounded-sm transition-all duration-100 ${
+                active ? 'bg-neutral-500' : 'bg-neutral-700'
               }`}
               style={{ height: `${Math.round(height * 100)}%` }}
             />

@@ -19,7 +19,6 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("", response_model=SessionRead, status_code=status.HTTP_201_CREATED)
-@limiter.limit("30/minute")
 async def create_session(
     request: Request,
     payload: SessionCreate,

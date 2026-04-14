@@ -30,7 +30,7 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="w-full max-w-sm border-slate-800 bg-slate-900/60">
+      <Card className="w-full max-w-sm border-neutral-800 bg-neutral-900/60">
         <CardHeader>
           <CardTitle>登录</CardTitle>
           <CardDescription>使用已注册账号登录面试系统</CardDescription>
@@ -53,14 +53,14 @@ export function LoginPage() {
                 required
               />
             </div>
-            {error && <p className="text-sm text-rose-300">{error}</p>}
+            {error && <p className="text-sm text-rose-400">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? '登录中...' : '登录'}
             </Button>
           </form>
-          <p className="mt-4 text-center text-sm text-slate-400">
+          <p className="mt-4 text-center text-sm text-neutral-400">
             还没有账号？{' '}
-            <Link to="/register" className="text-blue-300 hover:text-blue-200">
+            <Link to="/register" className="text-neutral-400 hover:text-neutral-200">
               注册
             </Link>
           </p>

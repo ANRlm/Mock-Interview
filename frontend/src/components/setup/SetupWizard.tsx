@@ -42,7 +42,7 @@ export function SetupWizard() {
         </CardHeader>
         <CardContent className="space-y-6">
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">1. 选择职位方向</h3>
+            <h3 className="text-sm font-semibold text-neutral-200">1. 选择职位方向</h3>
             <div className="grid gap-3 md:grid-cols-2">
               {roleOptions.map((option) => (
                 <button
@@ -50,13 +50,13 @@ export function SetupWizard() {
                   key={option.role}
                   className={`rounded-xl border px-4 py-3 text-left transition-colors ${
                     selectedRole === option.role
-                      ? 'border-blue-500 bg-blue-500/10'
-                      : 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
+                      ? 'border-neutral-500 bg-neutral-800/80'
+                      : 'border-neutral-800 bg-neutral-950/40 hover:border-neutral-700'
                   }`}
                   onClick={() => setRole(option.role)}
                 >
-                  <p className="text-sm font-semibold text-slate-100">{option.label}</p>
-                  <p className="mt-1 text-xs text-slate-400">{option.desc}</p>
+                  <p className="text-sm font-semibold text-neutral-100">{option.label}</p>
+                  <p className="mt-1 text-xs text-neutral-400">{option.desc}</p>
                 </button>
               ))}
             </div>
@@ -65,18 +65,18 @@ export function SetupWizard() {
           <Separator />
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">2. 细分职位（可选）</h3>
+            <h3 className="text-sm font-semibold text-neutral-200">2. 细分职位（可选）</h3>
             <Input placeholder="例如：前端工程师 / 刑事律师 / 内科医生" value={subRole} onChange={(e) => setSubRole(e.target.value)} />
           </section>
 
           <Separator />
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">3. 简历上传（预留）</h3>
+            <h3 className="text-sm font-semibold text-neutral-200">3. 简历上传（预留）</h3>
             <ResumeUploader file={resumeFile} onFileChange={setResumeFile} />
           </section>
 
-          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+          {error ? <p className="text-sm text-rose-400">{error}</p> : null}
 
           <div className="flex justify-end">
             <Button onClick={handleStart}>开始面试</Button>

@@ -77,8 +77,8 @@ export function ReportPageView({ sessionId }: ReportPageViewProps) {
           <CardDescription>{message}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-            <div className="h-full w-1/2 animate-pulse bg-gradient-to-r from-blue-500 to-cyan-400" />
+          <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-800">
+            <div className="h-full w-1/2 animate-pulse bg-neutral-500" />
           </div>
         </CardContent>
       </Card>
@@ -111,12 +111,12 @@ export function ReportPageView({ sessionId }: ReportPageViewProps) {
         <CardHeader>
           <CardTitle className="text-base">面试官总结</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-slate-300">
+        <CardContent className="space-y-3 text-sm text-neutral-300">
           <p>{currentReport.llm_evaluation_text}</p>
 
           <div>
-            <p className="mb-1 text-xs uppercase tracking-widest text-emerald-300">优势</p>
-            <ul className="space-y-1 text-slate-300">
+            <p className="mb-1 text-xs uppercase tracking-widest text-neutral-400">优势</p>
+            <ul className="space-y-1 text-neutral-300">
               {currentReport.strengths.map((item, idx) => (
                 <li key={idx}>- {item}</li>
               ))}
@@ -124,8 +124,8 @@ export function ReportPageView({ sessionId }: ReportPageViewProps) {
           </div>
 
           <div>
-            <p className="mb-1 text-xs uppercase tracking-widest text-amber-300">改进建议</p>
-            <ul className="space-y-1 text-slate-300">
+            <p className="mb-1 text-xs uppercase tracking-widest text-neutral-400">改进建议</p>
+            <ul className="space-y-1 text-neutral-300">
               {currentReport.improvements.map((item, idx) => (
                 <li key={idx}>- {item}</li>
               ))}

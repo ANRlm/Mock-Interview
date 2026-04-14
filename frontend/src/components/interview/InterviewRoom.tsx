@@ -4,17 +4,21 @@ import { useNavigate } from 'react-router-dom'
 
 import { AudioVisualizer } from '@/components/interview/AudioVisualizer'
 import { ChatPanel } from '@/components/interview/ChatPanel'
+import { PosePip } from '@/components/interview/PosePip'
 import { StatusBar } from '@/components/interview/StatusBar'
-import { VideoPanel } from '@/components/interview/VideoPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { useAudioRecorder } from '@/hooks/useAudioRecorder'
+import { useManualTTS } from '@/hooks/useManualTTS'
+import { useManualVoiceInput } from '@/hooks/useManualVoiceInput'
 import { useMediaPipe } from '@/hooks/useMediaPipe'
 import { useTTSPlayer } from '@/hooks/useTTSPlayer'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { getMessages, postBehavior, updateSession } from '@/services/api'
 import { useInterviewStore } from '@/stores/interviewStore'
+import { useInterviewModeStore } from '@/stores/useInterviewModeStore'
+import { useVoiceChannelStore } from '@/stores/useVoiceChannelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import type { ConversationMessage, TtsProvider, WsServerMessage } from '@/types/interview'
 import { MEDIA_INSECURE_CONTEXT_ERROR, MEDIA_UNSUPPORTED_ERROR } from '@/hooks/useAudioRecorder'
@@ -31,11 +35,15 @@ export function InterviewRoom() {
   const [micDenied, setMicDenied] = useState(false)
   const [micWarningText, setMicWarningText] = useState<string | null>(null)
   const [behaviorWarning, setBehaviorWarning] = useState<string | null>(null)
+  const [manualVoiceInputActive, setManualVoiceInputActive] = useState(false)
   const currentResponseIdRef = useRef<string>('')
   const lastBargeInAtRef = useRef(0)
   const currentOrigin = `${window.location.protocol}//${window.location.host}`
+  const [ttsPlayingFor, setTtsPlayingFor] = useState<string | null>(null)
 
   const { selectedRole, subRole } = useSettingsStore()
+  const { mode } = useInterviewModeStore()
+  const { setSttStatus, setTtsStatus, setLlmStatus, resetAll } = useVoiceChannelStore()
   const {
     session,
     setSession,
@@ -63,6 +71,23 @@ export function InterviewRoom() {
   const { playing: ttsPlaying, queueSize: ttsQueueSize, enqueueBase64, clear: clearTtsQueue } = useTTSPlayer(() => {
     setStage('listening')
   })
+
+  const { status: manualTtsStatus, play: playManualTts, stop: stopManualTts } = useManualTTS()
+
+  const handleTranscriptReady = useCallback((text: string) => {
+    if (text) {
+      setInput((prev) => {
+        if (prev.trim()) {
+          return prev + ' ' + text
+        }
+        return text
+      })
+    }
+  }, [])
+
+  const { isRecording: isManualRecording, isConverting: isVoiceConverting, startRecording: startManualRecording, stopRecording: stopManualRecording } = useManualVoiceInput(sessionId, handleTranscriptReady)
+
+  const [micMutedByTts, setMicMutedByTts] = useState(false)
 
   const resolveProviderLabel = (provider: TtsProvider): string => {
     if (provider === 'cosyvoice2-http') {
@@ -111,6 +136,7 @@ export function InterviewRoom() {
         }
         setStage('speaking')
         appendStreamToken(payload.token)
+        setLlmStatus('streaming')
         return
       }
       case 'llm_done': {
@@ -126,6 +152,7 @@ export function InterviewRoom() {
           }),
         )
         clearStreamText()
+        setLlmStatus('done')
         return
       }
       case 'llm_stats': {
@@ -140,6 +167,7 @@ export function InterviewRoom() {
         setTtsProvider(provider)
         setTtsProviderLabel(resolveProviderLabel(provider))
         enqueueBase64(payload.data, payload.format, payload.sample_rate)
+        setTtsStatus('playing')
         return
       }
       case 'tts_done': {
@@ -148,6 +176,7 @@ export function InterviewRoom() {
         }
         if (!ttsPlaying && ttsQueueSize === 0) {
           setStage('listening')
+          setTtsStatus('idle')
         }
         return
       }
@@ -156,10 +185,13 @@ export function InterviewRoom() {
         currentResponseIdRef.current = ''
         setStage('listening')
         setTtsProviderLabel('已打断')
+        setTtsStatus('idle')
         return
       }
       case 'error': {
         setStage('idle')
+        setLlmStatus('idle')
+        setTtsStatus('idle')
         return
       }
       case 'behavior_warning': {
@@ -177,7 +209,7 @@ export function InterviewRoom() {
         return
       }
     }
-  }, [addMessage, appendStreamToken, clearStreamText, enqueueBase64, clearTtsQueue, messages, session, setStage, setSttPreview, setLlmStats, setTtsProvider, setTtsProviderLabel, ttsPlaying, ttsQueueSize])
+  }, [addMessage, appendStreamToken, clearStreamText, enqueueBase64, clearTtsQueue, messages, session, setStage, setSttPreview, setLlmStats, setTtsProvider, setTtsProviderLabel, ttsPlaying, ttsQueueSize, setLlmStatus, setTtsStatus])
 
   const { sendCandidateMessage, sendAudioChunk, sendAudioEnd, sendInterrupt, sendBehaviorFrame, connected } = useWebSocket({
     sessionId,
@@ -194,18 +226,20 @@ export function InterviewRoom() {
   const interruptPlayback = useCallback(
     (reason = 'barge_in') => {
       clearTtsQueue()
+      stopManualTts()
       currentResponseIdRef.current = ''
       setTtsProviderLabel('已打断')
       setStage('listening')
+      setTtsStatus('idle')
       sendInterrupt(reason)
     },
-    [clearTtsQueue, sendInterrupt, setStage, setTtsProviderLabel],
+    [clearTtsQueue, stopManualTts, sendInterrupt, setStage, setTtsProviderLabel, setTtsStatus],
   )
 
   const recorderEnabled = connected && inputMode === 'voice'
 
-  const { isRecording, micLevel, start, stop } = useAudioRecorder({
-    enabled: recorderEnabled,
+  const { isRecording, micLevel, start, stop, mute, unmute } = useAudioRecorder({
+    enabled: recorderEnabled && !manualVoiceInputActive,
     onSpeechStart: () => {
       const now = Date.now()
       const canBargeIn = stage === 'speaking' && (ttsPlaying || ttsQueueSize > 0)
@@ -252,7 +286,6 @@ export function InterviewRoom() {
         return
       }
 
-      // Real-time feedback via WebSocket (for instant analysis response)
       sendBehaviorFrameRef.current(
         sample.frameSecond,
         sample.eyeContactScore,
@@ -262,7 +295,6 @@ export function InterviewRoom() {
         sample.imageBase64,
       )
 
-      // Batch persistence via HTTP
       void postBehavior(sessionId, {
         frames: [
           {
@@ -285,7 +317,7 @@ export function InterviewRoom() {
   }, [mediaPipe, sessionId])
 
   useEffect(() => {
-    if (!recorderEnabled) {
+    if (!recorderEnabled || manualVoiceInputActive) {
       stop()
       return
     }
@@ -307,7 +339,7 @@ export function InterviewRoom() {
       setInputMode('text')
       setStage('idle')
     })
-  }, [recorderEnabled, setInputMode, setStage, start, stop, currentOrigin])
+  }, [recorderEnabled, manualVoiceInputActive, setInputMode, setStage, start, stop, currentOrigin])
 
   const turnCount = useMemo(() => messages.filter((msg) => msg.role === 'candidate').length, [messages])
 
@@ -346,18 +378,60 @@ export function InterviewRoom() {
     }
 
     stop()
+    stopManualRecording()
+    stopManualTts()
     clearTtsQueue()
     currentResponseIdRef.current = ''
+    resetAll()
     const updated = await updateSession(session.id, { status: 'completed' })
     setSession(updated)
     navigate(`/report/${session.id}`)
   }
 
+  const handleReadAloud = useCallback((messageId: string, text: string) => {
+    setTtsPlayingFor(messageId)
+    playManualTts(messageId, text)
+    setTimeout(() => {
+      if (ttsPlayingFor === messageId) {
+        setTtsPlayingFor(null)
+      }
+    }, 30000)
+  }, [playManualTts, ttsPlayingFor])
+
+  useEffect(() => {
+    if (manualTtsStatus === 'idle') {
+      setTtsPlayingFor(null)
+    }
+  }, [manualTtsStatus])
+
+  useEffect(() => {
+    if (inputMode !== 'voice') {
+      return
+    }
+    if (ttsPlaying || ttsQueueSize > 0 || manualTtsStatus === 'playing') {
+      mute()
+      setMicMutedByTts(true)
+    } else if (micMutedByTts) {
+      unmute()
+      setMicMutedByTts(false)
+    }
+  }, [ttsPlaying, ttsQueueSize, manualTtsStatus, inputMode, mute, unmute, micMutedByTts])
+
+  const handleManualVoiceInputToggle = useCallback(() => {
+    if (manualVoiceInputActive) {
+      stopManualRecording()
+      setManualVoiceInputActive(false)
+    } else {
+      setManualVoiceInputActive(true)
+      startManualRecording()
+    }
+  }, [manualVoiceInputActive, startManualRecording, stopManualRecording])
+
   if (!session) {
     return (
       <Card>
         <CardContent className="flex items-center justify-between gap-4 p-8">
-          <p className="text-sm text-slate-300">尚未创建面试会话，请先完成配置。</p>
+          <p className="text-sm text-neutral-300">尚未创建面试会话，请先完成配置。</p>
           <Button onClick={() => navigate('/setup')}>前往配置页</Button>
         </CardContent>
       </Card>
@@ -366,10 +440,12 @@ export function InterviewRoom() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+      <PosePip />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/70 px-4 py-3">
         <div>
-          <p className="text-xs uppercase tracking-widest text-slate-400">Interview Session</p>
-          <p className="text-sm font-semibold text-slate-100">
+          <p className="text-xs uppercase tracking-widest text-neutral-400">Interview Session</p>
+          <p className="text-sm font-semibold text-neutral-100">
             {selectedRole} {subRole ? `· ${subRole}` : ''}
           </p>
         </div>
@@ -389,6 +465,10 @@ export function InterviewRoom() {
             variant={inputMode === 'text' ? 'default' : 'secondary'}
             onClick={() => {
               setInputMode('text')
+              if (manualVoiceInputActive) {
+                stopManualRecording()
+                setManualVoiceInputActive(false)
+              }
               interruptPlayback('switch_to_text')
               stop()
               setStage('idle')
@@ -405,17 +485,15 @@ export function InterviewRoom() {
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_1.35fr_0.9fr]">
         <div className="space-y-4">
-          <VideoPanel
-            ready={mediaPipe.ready}
-            eyeContactScore={mediaPipe.eyeContactScore}
-            headPoseScore={mediaPipe.headPoseScore}
-            expression={mediaPipe.expression}
-            warning={behaviorWarning ?? mediaPipe.warning}
-          />
-          <AudioVisualizer level={micLevel} active={isRecording} />
+          <AudioVisualizer level={micLevel} active={isRecording || isManualRecording} />
         </div>
 
-        <ChatPanel messages={messages} streamText={streamText} />
+        <ChatPanel
+          messages={messages}
+          streamText={streamText}
+          onReadAloud={inputMode === 'text' ? handleReadAloud : undefined}
+          ttsPlayingFor={ttsPlayingFor}
+        />
 
         <StatusBar
           stage={stage}
@@ -431,18 +509,48 @@ export function InterviewRoom() {
 
       <Card>
         <CardContent className="space-y-3 p-4">
-          <p className="text-xs text-slate-400">
-            {inputMode === 'voice' ? '当前为语音模式，系统自动进行录音与静音检测。' : '当前为文本模式，可手动输入回答。'}
+          <p className="text-xs text-neutral-400">
+            {inputMode === 'voice'
+              ? '当前为语音模式，系统自动进行录音与静音检测。'
+              : '当前为文本模式，可手动输入回答。点击回复旁的"朗读"按钮可手动触发语音。点击下方麦克风图标可进行语音输入。'}
           </p>
-          {micDenied && micWarningText ? <p className="text-xs text-amber-300">{micWarningText}</p> : null}
-          <Textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="例如：我曾主导一个高并发系统改造，核心目标是..."
-            disabled={inputMode !== 'text'}
-          />
+          {micDenied && micWarningText ? <p className="text-xs text-amber-400">{micWarningText}</p> : null}
+          <div className="relative">
+            <Textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="例如：我曾主导一个高并发系统改造，核心目标是..."
+              disabled={inputMode !== 'text'}
+              className="pr-20"
+            />
+            <div className="absolute bottom-2 right-2 flex gap-1">
+              {inputMode === 'text' && (
+                <Button
+                  variant={manualVoiceInputActive ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={handleManualVoiceInputToggle}
+                  disabled={!connected || isVoiceConverting}
+                  className="h-8 px-2"
+                >
+                  {isVoiceConverting ? (
+                    <span className="text-xs">转换中...</span>
+                  ) : isManualRecording ? (
+                    <>
+                      <span className="mr-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-xs">停止</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={14} />
+                      <span className="ml-1 text-xs">语音输入</span>
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
           <div className="flex justify-end">
-            <Button onClick={handleSendText} disabled={inputMode !== 'text' || !input.trim() || !connected}>
+            <Button onClick={handleSendText} disabled={inputMode !== 'text' || !input.trim() || !connected || isManualRecording || isVoiceConverting}>
               <Send size={14} className="mr-1" />
               发送回答
             </Button>

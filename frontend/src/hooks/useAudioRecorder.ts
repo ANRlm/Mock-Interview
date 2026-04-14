@@ -11,9 +11,12 @@ interface UseAudioRecorderParams {
 
 interface UseAudioRecorderResult {
   isRecording: boolean
+  isMuted: boolean
   micLevel: number
   start: () => Promise<void>
   stop: () => void
+  mute: () => void
+  unmute: () => void
 }
 
 const CHUNK_MS = 120
@@ -74,12 +77,14 @@ function downsampleBuffer(input: Float32Array, sourceRate: number, targetRate: n
 
 export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled }: UseAudioRecorderParams): UseAudioRecorderResult {
   const [isRecording, setIsRecording] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
   const [micLevel, setMicLevel] = useState(0)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const originalTracksRef = useRef<MediaStreamTrack[]>([])
 
   const pcmBufferRef = useRef<number[]>([])
   const sourceSampleRateRef = useRef(TARGET_SAMPLE_RATE)
@@ -135,12 +140,14 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
     sourceRef.current = null
     streamRef.current = null
     audioContextRef.current = null
+    originalTracksRef.current = []
     pcmBufferRef.current = []
     speechStartedRef.current = false
     speechCandidateSinceRef.current = 0
     runningRef.current = false
     setMicLevel(0)
     setIsRecording(false)
+    setIsMuted(false)
   }, [])
 
   const stop = useCallback(() => {
@@ -149,6 +156,24 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
     }
     cleanup()
   }, [cleanup])
+
+  const mute = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.enabled = false
+      })
+      setIsMuted(true)
+    }
+  }, [])
+
+  const unmute = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.enabled = true
+      })
+      setIsMuted(false)
+    }
+  }, [])
 
   const start = useCallback(async () => {
     if (!enabled || runningRef.current) {
@@ -176,6 +201,8 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
       video: false,
     })
 
+    originalTracksRef.current = stream.getTracks()
+
     const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!AudioContextCtor) {
       throw new Error('AudioContext is not supported in this browser')
@@ -192,6 +219,7 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
     processorRef.current = processor
     runningRef.current = true
     setIsRecording(true)
+    setIsMuted(false)
     speechStartedRef.current = false
     speechCandidateSinceRef.current = 0
     lastVoiceAtRef.current = Date.now()
@@ -261,8 +289,11 @@ export function useAudioRecorder({ onChunk, onSpeechStart, onSpeechEnd, enabled 
 
   return {
     isRecording,
+    isMuted,
     micLevel,
     start,
     stop,
+    mute,
+    unmute,
   }
 }

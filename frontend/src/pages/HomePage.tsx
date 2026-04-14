@@ -20,10 +20,10 @@ export function HomePage() {
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.22),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(14,165,233,0.18),transparent_40%),#070b13] p-8 md:p-10">
+      <section className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 p-8 md:p-10">
         <Badge variant="secondary">Local-first AI Interview</Badge>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-100 md:text-4xl">沉浸式模拟面试系统</h1>
-        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300">
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-neutral-100 md:text-4xl">沉浸式模拟面试系统</h1>
+        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-neutral-300">
           先从文本模式完成一轮完整面试闭环，后续可无缝扩展语音、视觉行为分析与简历驱动提问。
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
@@ -41,10 +41,10 @@ export function HomePage() {
         {cards.map((item) => {
           const Icon = item.icon
           return (
-            <Card key={item.role} className="group transition-colors hover:border-blue-500/40">
+            <Card key={item.role} className="group transition-colors hover:border-neutral-500/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Icon size={18} className="text-blue-300" />
+                  <Icon size={18} className="text-neutral-400" />
                   {item.title}
                 </CardTitle>
                 <CardDescription>{item.desc}</CardDescription>
@@ -52,7 +52,7 @@ export function HomePage() {
               <CardContent className="pt-0">
                 <Button
                   variant="ghost"
-                  className="px-0 text-blue-300 group-hover:text-blue-200"
+                  className="px-0 text-neutral-400 group-hover:text-neutral-200"
                   onClick={() => {
                     setRole(item.role)
                     navigate('/setup')
