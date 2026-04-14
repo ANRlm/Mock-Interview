@@ -1,176 +1,96 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
+import { useAuthStore } from '@/stores/authStore'
 
-import { createInterviewSocket } from '@/services/websocket'
-import type { WsServerMessage } from '@/types/interview'
-
-interface UseWebSocketParams {
-  sessionId: string | null
-  onMessage: (message: WsServerMessage) => void
+interface UseWebSocketOptions {
+  sessionId: string
+  onMessage: (payload: Record<string, unknown>) => void
 }
 
-interface UseWebSocketResult {
-  sendCandidateMessage: (text: string) => void
-  sendAudioChunk: (base64Pcm: string, sampleRate: number) => void
-  sendAudioEnd: () => void
-  sendInterrupt: (reason?: string) => void
-  sendBehaviorFrame: (frameSecond: number, eyeContactScore: number, headPoseScore: number, gazeX: number | null, gazeY: number | null, imageBase64: string | null) => void
-  connected: boolean
-  reconnectCount: number
-}
-
-const MAX_RETRIES = 5
-
-export function useWebSocket({ sessionId, onMessage }: UseWebSocketParams): UseWebSocketResult {
-  const [connected, setConnected] = useState(false)
-  const [reconnectCount, setReconnectCount] = useState(0)
-
+export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
-  const retryRef = useRef(0)
-  const onMessageRef = useRef(onMessage)
+  const reconnectTimeoutRef = useRef<number | null>(null)
+  const token = useAuthStore((s) => s.token)
+  const reconnectAttemptsRef = useRef(0)
+  const maxReconnectAttempts = 5
 
-  useEffect(() => {
-    onMessageRef.current = onMessage
-  }, [onMessage])
+  const connect = useCallback(() => {
+    if (!token) return
 
-  useEffect(() => {
-    if (!sessionId) {
-      return
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/ws/interview/${sessionId}?token=${token}`
+
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      reconnectAttemptsRef.current = 0
+      startPing()
     }
 
-    let cancelled = false
-    retryRef.current = 0
-
-    const connect = () => {
-      if (cancelled) {
-        return
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.type === 'pong') return
+        onMessage(payload)
+      } catch {
       }
-
-      const ws = createInterviewSocket(
-        sessionId,
-        (payload) => {
-          onMessageRef.current(payload)
-        },
-        () => {
-          setConnected(false)
-          if (cancelled || retryRef.current >= MAX_RETRIES) {
-            return
-          }
-
-          retryRef.current += 1
-          setReconnectCount(retryRef.current)
-          const backoff = Math.min(1000 * 2 ** (retryRef.current - 1), 8000)
-          window.setTimeout(connect, backoff)
-        },
-      )
-
-      ws.onopen = () => {
-        retryRef.current = 0
-        setReconnectCount(0)
-        setConnected(true)
-      }
-
-      ws.onerror = () => {
-        setConnected(false)
-      }
-
-      wsRef.current = ws
     }
 
+    ws.onclose = () => {
+      if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          reconnectAttemptsRef.current++
+          connect()
+        }, 1000 * Math.min(30, 2 ** reconnectAttemptsRef.current))
+      }
+    }
+
+    ws.onerror = () => {
+      ws.close()
+    }
+  }, [sessionId, token, onMessage])
+
+  const startPing = useCallback(() => {
+    const ping = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'ping' }))
+      }
+      setTimeout(ping, 30000)
+    }
+    ping()
+  }, [])
+
+  useEffect(() => {
     connect()
-
     return () => {
-      cancelled = true
-      retryRef.current = MAX_RETRIES
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
       wsRef.current?.close()
-      wsRef.current = null
-      setConnected(false)
     }
-  }, [sessionId])
+  }, [connect])
 
-  const sendCandidateMessage = useCallback((text: string) => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return
+  const send = useCallback((data: Record<string, unknown>) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(data))
     }
-
-    ws.send(
-      JSON.stringify({
-        type: 'candidate_message',
-        text,
-      }),
-    )
   }, [])
 
-  const sendAudioChunk = useCallback((base64Pcm: string, sampleRate: number) => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return
-    }
-
-    ws.send(
-      JSON.stringify({
-        type: 'audio_chunk',
-        data: base64Pcm,
-        sample_rate: sampleRate,
-      }),
-    )
-  }, [])
+  const sendAudioChunk = useCallback((chunk: ArrayBuffer, sampleRate: number) => {
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(chunk)))
+    send({ type: 'audio_chunk', data: base64, sample_rate: sampleRate })
+  }, [send])
 
   const sendAudioEnd = useCallback(() => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return
-    }
+    send({ type: 'audio_end' })
+  }, [send])
 
-    ws.send(
-      JSON.stringify({
-        type: 'audio_end',
-      }),
-    )
-  }, [])
+  const sendInterrupt = useCallback((reason: string) => {
+    send({ type: 'interrupt', reason })
+  }, [send])
 
-  const sendInterrupt = useCallback((reason = 'client_interrupt') => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return
-    }
+  const connected = wsRef.current?.readyState === WebSocket.OPEN
 
-    ws.send(
-      JSON.stringify({
-        type: 'interrupt',
-        reason,
-      }),
-    )
-  }, [])
-
-  const sendBehaviorFrame = useCallback(
-    (
-      frameSecond: number,
-      eyeContactScore: number,
-      headPoseScore: number,
-      gazeX: number | null,
-      gazeY: number | null,
-      imageBase64: string | null,
-    ) => {
-      const ws = wsRef.current
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        return
-      }
-
-      ws.send(
-        JSON.stringify({
-          type: 'behavior_frame',
-          frame_second: frameSecond,
-          eye_contact_score: eyeContactScore,
-          head_pose_score: headPoseScore,
-          gaze_x: gazeX,
-          gaze_y: gazeY,
-          image_base64: imageBase64,
-        }),
-      )
-    },
-    [],
-  )
-
-  return { sendCandidateMessage, sendAudioChunk, sendAudioEnd, sendInterrupt, sendBehaviorFrame, connected, reconnectCount }
+  return { send, sendAudioChunk, sendAudioEnd, sendInterrupt, connected }
 }

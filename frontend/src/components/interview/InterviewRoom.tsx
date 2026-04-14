@@ -1,51 +1,41 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Mic, MicOff, Send } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-import { AudioVisualizer } from '@/components/interview/AudioVisualizer'
-import { ChatPanel } from '@/components/interview/ChatPanel'
-import { PosePip } from '@/components/interview/PosePip'
-import { StatusBar } from '@/components/interview/StatusBar'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
-import { useAudioRecorder } from '@/hooks/useAudioRecorder'
-import { useManualTTS } from '@/hooks/useManualTTS'
-import { useManualVoiceInput } from '@/hooks/useManualVoiceInput'
-import { useMediaPipe } from '@/hooks/useMediaPipe'
-import { useTTSPlayer } from '@/hooks/useTTSPlayer'
+import { useInterviewStore, type Message } from '@/stores/interviewStore'
+import { ChatPanel } from './ChatPanel'
+import { AudioPanel } from './AudioPanel'
+import { StatusBar } from './StatusBar'
+import { PosePip } from './PosePip'
+import { Button } from '@/components/ui/Button'
+import { Textarea } from '@/components/ui/Textarea'
+import { Card, CardContent } from '@/components/ui/Card'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { getMessages, postBehavior, updateSession } from '@/services/api'
-import { useInterviewStore } from '@/stores/interviewStore'
-import { useInterviewModeStore } from '@/stores/useInterviewModeStore'
-import { useVoiceChannelStore } from '@/stores/useVoiceChannelStore'
-import { useSettingsStore } from '@/stores/settingsStore'
-import type { ConversationMessage, TtsProvider, WsServerMessage } from '@/types/interview'
-import { MEDIA_INSECURE_CONTEXT_ERROR, MEDIA_UNSUPPORTED_ERROR } from '@/hooks/useAudioRecorder'
+import { useAudioRecorder } from '@/hooks/useAudioRecorder'
+import { useTTSPlayer } from '@/hooks/useTTSPlayer'
+import { useManualVoiceInput } from '@/hooks/useManualVoiceInput'
+import { useManualTTS } from '@/hooks/useManualTTS'
+import { api, getMessages } from '@/services/api'
 
-const localMessage = (params: Omit<ConversationMessage, 'id' | 'timestamp'>): ConversationMessage => ({
+const localMessage = (params: Omit<Message, 'id' | 'timestamp'>): Message => ({
   ...params,
   id: crypto.randomUUID(),
   timestamp: new Date().toISOString(),
 })
 
-export function InterviewRoom() {
+interface WsMessage {
+  type: string
+  [key: string]: unknown
+}
+
+export function InterviewRoom({ sessionId }: { sessionId: string }) {
   const navigate = useNavigate()
   const [input, setInput] = useState('')
-  const [micDenied, setMicDenied] = useState(false)
-  const [micWarningText, setMicWarningText] = useState<string | null>(null)
-  const [behaviorWarning, setBehaviorWarning] = useState<string | null>(null)
-  const [manualVoiceInputActive, setManualVoiceInputActive] = useState(false)
-  const currentResponseIdRef = useRef<string>('')
-  const lastBargeInAtRef = useRef(0)
-  const currentOrigin = `${window.location.protocol}//${window.location.host}`
+  const [micMutedByTts, setMicMutedByTts] = useState(false)
   const [ttsPlayingFor, setTtsPlayingFor] = useState<string | null>(null)
+  const [manualVoiceActive, setManualVoiceActive] = useState(false)
+  const currentResponseIdRef = { current: '' }
 
-  const { selectedRole, subRole } = useSettingsStore()
-  const { mode } = useInterviewModeStore()
-  const { setSttStatus, setTtsStatus, setLlmStatus, resetAll } = useVoiceChannelStore()
   const {
-    session,
     setSession,
     messages,
     setMessages,
@@ -60,354 +50,108 @@ export function InterviewRoom() {
     inputMode,
     setInputMode,
     ttsProviderLabel,
-    setTtsProvider,
     setTtsProviderLabel,
     llmStats,
     setLlmStats,
+    reset,
   } = useInterviewStore()
 
-  const sessionId = session?.id ?? null
-
-  const { playing: ttsPlaying, queueSize: ttsQueueSize, enqueueBase64, clear: clearTtsQueue } = useTTSPlayer(() => {
-    setStage('listening')
+  const { playing: ttsPlaying, queueSize: ttsQueueSize, enqueueBase64, clear: clearTtsQueue } = useTTSPlayer({
+    onQueueEmpty: () => setStage('listening'),
   })
 
-  const { status: manualTtsStatus, play: playManualTts, stop: stopManualTts } = useManualTTS()
+  const { play: playManualTts, stop: stopManualTts, status: manualTtsStatus } = useManualTTS()
 
   const handleTranscriptReady = useCallback((text: string) => {
     if (text) {
-      setInput((prev) => {
-        if (prev.trim()) {
-          return prev + ' ' + text
-        }
-        return text
-      })
+      setInput((prev) => (prev.trim() ? prev + ' ' + text : text))
     }
   }, [])
 
-  const { isRecording: isManualRecording, isConverting: isVoiceConverting, startRecording: startManualRecording, stopRecording: stopManualRecording } = useManualVoiceInput(sessionId, handleTranscriptReady)
+  const { isRecording: isManualRecording, startRecording: startManualRecording, stopRecording: stopManualRecording } = useManualVoiceInput({
+    sessionId,
+    onTranscription: handleTranscriptReady,
+  })
 
-  const [micMutedByTts, setMicMutedByTts] = useState(false)
-
-  const resolveProviderLabel = (provider: TtsProvider): string => {
-    if (provider === 'cosyvoice2-http') {
-      return 'CosyVoice2'
-    }
-    return '未知'
-  }
-
-  const handleSocketMessage = useCallback((payload: WsServerMessage) => {
-    if (!session) {
-      return
-    }
-
-    switch (payload.type) {
-      case 'stt_partial': {
-        setSttPreview(payload.text)
+  const handleSocketMessage = useCallback((payload: Record<string, unknown>) => {
+    const msg = payload as WsMessage
+    switch (msg.type) {
+      case 'stt_partial':
+        setSttPreview(String(msg.text || ''))
         return
-      }
       case 'stt_final': {
-        const candidateText = payload.text.trim()
-        setSttPreview(payload.text)
-        if (candidateText) {
+        const text = String(msg.text || '').trim()
+        setSttPreview(text)
+        if (text) {
           currentResponseIdRef.current = ''
           setLlmStats(null)
-          const nextTurn = messages.filter((msg) => msg.role === 'candidate').length + 1
-          addMessage(
-            localMessage({
-              session_id: session.id,
-              role: 'candidate',
-              content: candidateText,
-              turn_index: nextTurn,
-            }),
-          )
+          const nextTurn = messages.filter((m) => m.role === 'candidate').length + 1
+          addMessage(localMessage({ session_id: sessionId, role: 'candidate', content: text, turn_index: nextTurn }))
           setStage('thinking')
         }
         return
       }
       case 'llm_token': {
-        if (payload.response_id) {
-          if (!currentResponseIdRef.current) {
-            currentResponseIdRef.current = payload.response_id
-          }
-          if (payload.response_id !== currentResponseIdRef.current) {
-            return
-          }
+        const rid = String(msg.response_id || '')
+        if (rid && !currentResponseIdRef.current) {
+          currentResponseIdRef.current = rid
+        }
+        if (rid && currentResponseIdRef.current && rid !== currentResponseIdRef.current) {
+          return
         }
         setStage('speaking')
-        appendStreamToken(payload.token)
-        setLlmStatus('streaming')
+        appendStreamToken(String(msg.token || ''))
         return
       }
       case 'llm_done': {
-        if (payload.response_id && payload.response_id !== currentResponseIdRef.current) {
-          return
-        }
-        addMessage(
-          localMessage({
-            session_id: session.id,
-            role: 'interviewer',
-            content: payload.full_text,
-            turn_index: payload.turn_index,
-          }),
-        )
+        const rid = String(msg.response_id || '')
+        if (rid && rid !== currentResponseIdRef.current) return
+        addMessage(localMessage({ session_id: sessionId, role: 'interviewer', content: String(msg.full_text || ''), turn_index: Number(msg.turn_index) || 1 }))
         clearStreamText()
-        setLlmStatus('done')
         return
       }
-      case 'llm_stats': {
-        setLlmStats(payload)
+      case 'llm_stats':
+        setLlmStats(msg as unknown as typeof llmStats)
         return
-      }
-      case 'tts_audio': {
-        if (payload.response_id && payload.response_id !== currentResponseIdRef.current) {
-          return
-        }
-        const provider = payload.provider ?? 'unknown'
-        setTtsProvider(provider)
-        setTtsProviderLabel(resolveProviderLabel(provider))
-        enqueueBase64(payload.data, payload.format, payload.sample_rate)
-        setTtsStatus('playing')
+      case 'tts_audio':
+        enqueueBase64(String(msg.data || ''), String(msg.format || 'pcm_s16le'), Number(msg.sample_rate) || 22050)
         return
-      }
-      case 'tts_done': {
-        if (payload.response_id && payload.response_id !== currentResponseIdRef.current) {
-          return
-        }
+      case 'tts_done':
         if (!ttsPlaying && ttsQueueSize === 0) {
           setStage('listening')
-          setTtsStatus('idle')
         }
         return
-      }
-      case 'tts_interrupted': {
+      case 'tts_interrupted':
         clearTtsQueue()
         currentResponseIdRef.current = ''
         setStage('listening')
         setTtsProviderLabel('已打断')
-        setTtsStatus('idle')
         return
-      }
-      case 'error': {
+      case 'error':
         setStage('idle')
-        setLlmStatus('idle')
-        setTtsStatus('idle')
         return
-      }
-      case 'behavior_warning': {
-        if (payload.warnings && payload.warnings.length > 0) {
-          setBehaviorWarning(payload.warnings.join(' '))
-          setTimeout(() => setBehaviorWarning(null), 5000)
-        }
-        return
-      }
-      case 'pong':
-      case 'interview_end': {
-        return
-      }
-      default: {
-        return
-      }
     }
-  }, [addMessage, appendStreamToken, clearStreamText, enqueueBase64, clearTtsQueue, messages, session, setStage, setSttPreview, setLlmStats, setTtsProvider, setTtsProviderLabel, ttsPlaying, ttsQueueSize, setLlmStatus, setTtsStatus])
+  }, [addMessage, appendStreamToken, clearStreamText, enqueueBase64, clearTtsQueue, messages, sessionId, setStage, setSttPreview, setLlmStats, setTtsProviderLabel, ttsPlaying, ttsQueueSize])
 
-  const { sendCandidateMessage, sendAudioChunk, sendAudioEnd, sendInterrupt, sendBehaviorFrame, connected } = useWebSocket({
-    sessionId,
-    onMessage: handleSocketMessage,
-  })
-
-  const sendBehaviorFrameRef = useRef(sendBehaviorFrame)
-  useLayoutEffect(() => {
-    sendBehaviorFrameRef.current = sendBehaviorFrame
-  }, [sendBehaviorFrame])
-
-  const mediaPipe = useMediaPipe()
-
-  const interruptPlayback = useCallback(
-    (reason = 'barge_in') => {
-      clearTtsQueue()
-      stopManualTts()
-      currentResponseIdRef.current = ''
-      setTtsProviderLabel('已打断')
-      setStage('listening')
-      setTtsStatus('idle')
-      sendInterrupt(reason)
-    },
-    [clearTtsQueue, stopManualTts, sendInterrupt, setStage, setTtsProviderLabel, setTtsStatus],
-  )
+  const { send, sendAudioChunk, sendAudioEnd, sendInterrupt, connected } = useWebSocket({ sessionId, onMessage: handleSocketMessage })
 
   const recorderEnabled = connected && inputMode === 'voice'
 
-  const { isRecording, micLevel, start, stop, mute, unmute } = useAudioRecorder({
-    enabled: recorderEnabled && !manualVoiceInputActive,
-    onSpeechStart: () => {
-      const now = Date.now()
-      const canBargeIn = stage === 'speaking' && (ttsPlaying || ttsQueueSize > 0)
-      if (canBargeIn && now - lastBargeInAtRef.current > 800) {
-        lastBargeInAtRef.current = now
-        interruptPlayback('barge_in')
-      }
-    },
-    onChunk: (chunk, sampleRate) => {
-      sendAudioChunk(chunk, sampleRate)
-    },
-    onSpeechEnd: () => {
-      sendAudioEnd()
-    },
+  const { isRecording, stop, mute, unmute } = useAudioRecorder({
+    enabled: recorderEnabled && !manualVoiceActive,
+    onChunk: (chunk, sampleRate) => sendAudioChunk(chunk, sampleRate),
+    onSpeechEnd: () => sendAudioEnd(),
   })
 
   useEffect(() => {
-    if (!sessionId) {
-      return
-    }
-
-    getMessages(sessionId)
-      .then((history) => setMessages(history))
-      .catch(() => undefined)
-  }, [sessionId, setMessages])
+    api.get<{ id: string; job_role: string; sub_role?: string }>(`/sessions/${sessionId}`)
+      .then(setSession)
+      .catch(() => navigate('/'))
+    getMessages(sessionId).then((msgs) => setMessages(msgs as Message[])).catch(() => {})
+  }, [sessionId])
 
   useEffect(() => {
-    if (!sessionId) {
-      mediaPipe.stop()
-      return
-    }
-
-    let disposed = false
-    mediaPipe.start().catch(() => undefined)
-
-    const timer = window.setInterval(() => {
-      if (disposed || !sessionId) {
-        return
-      }
-
-      const frameSecond = Math.floor(Date.now() / 1000)
-      const sample = mediaPipe.captureFrame(frameSecond)
-      if (!sample) {
-        return
-      }
-
-      sendBehaviorFrameRef.current(
-        sample.frameSecond,
-        sample.eyeContactScore,
-        sample.headPoseScore,
-        sample.gazeX,
-        sample.gazeY,
-        sample.imageBase64,
-      )
-
-      void postBehavior(sessionId, {
-        frames: [
-          {
-            frame_second: sample.frameSecond,
-            eye_contact_score: sample.eyeContactScore,
-            head_pose_score: sample.headPoseScore,
-            gaze_x: sample.gazeX,
-            gaze_y: sample.gazeY,
-            image_base64: sample.imageBase64,
-          },
-        ],
-      }).catch(() => undefined)
-    }, 5000)
-
-    return () => {
-      disposed = true
-      window.clearInterval(timer)
-      mediaPipe.stop()
-    }
-  }, [mediaPipe, sessionId])
-
-  useEffect(() => {
-    if (!recorderEnabled || manualVoiceInputActive) {
-      stop()
-      return
-    }
-
-    start().catch((error) => {
-      setMicDenied(true)
-
-      const message = error instanceof Error ? error.message : ''
-      if (message === MEDIA_INSECURE_CONTEXT_ERROR) {
-        setMicWarningText(
-          `当前页面不是安全上下文（HTTPS/localhost），浏览器会拦截麦克风权限。请改用 https://${window.location.host} 访问（同 IP），并在浏览器中信任证书。当前地址：${currentOrigin}`,
-        )
-      } else if (message === MEDIA_UNSUPPORTED_ERROR) {
-        setMicWarningText('当前浏览器不支持麦克风接口。')
-      } else {
-        setMicWarningText('麦克风权限不可用，已自动切换到文本模式。')
-      }
-
-      setInputMode('text')
-      setStage('idle')
-    })
-  }, [recorderEnabled, manualVoiceInputActive, setInputMode, setStage, start, stop, currentOrigin])
-
-  const turnCount = useMemo(() => messages.filter((msg) => msg.role === 'candidate').length, [messages])
-
-  const handleSendText = () => {
-    if (!session || !input.trim()) {
-      return
-    }
-
-    const text = input.trim()
-    const nextTurn = turnCount + 1
-
-    setLlmStats(null)
-    currentResponseIdRef.current = ''
-
-    if (stage === 'speaking' || stage === 'thinking') {
-      interruptPlayback('text_override')
-    }
-
-    addMessage(
-      localMessage({
-        session_id: session.id,
-        role: 'candidate',
-        content: text,
-        turn_index: nextTurn,
-      }),
-    )
-
-    setStage('thinking')
-    sendCandidateMessage(text)
-    setInput('')
-  }
-
-  const handleEnd = async () => {
-    if (!session) {
-      return
-    }
-
-    stop()
-    stopManualRecording()
-    stopManualTts()
-    clearTtsQueue()
-    currentResponseIdRef.current = ''
-    resetAll()
-    const updated = await updateSession(session.id, { status: 'completed' })
-    setSession(updated)
-    navigate(`/report/${session.id}`)
-  }
-
-  const handleReadAloud = useCallback((messageId: string, text: string) => {
-    setTtsPlayingFor(messageId)
-    playManualTts(messageId, text)
-    setTimeout(() => {
-      if (ttsPlayingFor === messageId) {
-        setTtsPlayingFor(null)
-      }
-    }, 30000)
-  }, [playManualTts, ttsPlayingFor])
-
-  useEffect(() => {
-    if (manualTtsStatus === 'idle') {
-      setTtsPlayingFor(null)
-    }
-  }, [manualTtsStatus])
-
-  useEffect(() => {
-    if (inputMode !== 'voice') {
-      return
-    }
+    if (inputMode !== 'voice') return
     if (ttsPlaying || ttsQueueSize > 0 || manualTtsStatus === 'playing') {
       mute()
       setMicMutedByTts(true)
@@ -417,142 +161,108 @@ export function InterviewRoom() {
     }
   }, [ttsPlaying, ttsQueueSize, manualTtsStatus, inputMode, mute, unmute, micMutedByTts])
 
-  const handleManualVoiceInputToggle = useCallback(() => {
-    if (manualVoiceInputActive) {
+  const handleSendText = () => {
+    if (!input.trim()) return
+    const text = input.trim()
+    const nextTurn = messages.filter((m) => m.role === 'candidate').length + 1
+    setLlmStats(null)
+    currentResponseIdRef.current = ''
+    if (stage === 'speaking' || stage === 'thinking') {
+      sendInterrupt('text_override')
+    }
+    addMessage(localMessage({ session_id: sessionId, role: 'candidate', content: text, turn_index: nextTurn }))
+    setStage('thinking')
+    send({ type: 'candidate_message', text })
+    setInput('')
+  }
+
+  const handleEnd = async () => {
+    stop()
+    stopManualRecording()
+    stopManualTts()
+    clearTtsQueue()
+    reset()
+    await api.patch(`/sessions/${sessionId}`, { status: 'completed' }).catch(() => {})
+    navigate(`/report/${sessionId}`)
+  }
+
+  const handleReadAloud = useCallback((messageId: string, text: string) => {
+    setTtsPlayingFor(messageId)
+    playManualTts(messageId, text)
+    setTimeout(() => {
+      if (ttsPlayingFor === messageId) setTtsPlayingFor(null)
+    }, 30000)
+  }, [playManualTts, ttsPlayingFor])
+
+  useEffect(() => {
+    if (manualTtsStatus === 'idle') setTtsPlayingFor(null)
+  }, [manualTtsStatus])
+
+  const handleManualVoiceToggle = () => {
+    if (manualVoiceActive) {
       stopManualRecording()
-      setManualVoiceInputActive(false)
+      setManualVoiceActive(false)
     } else {
-      setManualVoiceInputActive(true)
+      setManualVoiceActive(true)
       startManualRecording()
     }
-  }, [manualVoiceInputActive, startManualRecording, stopManualRecording])
-
-  if (!session) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-between gap-4 p-8">
-          <p className="text-sm text-neutral-300">尚未创建面试会话，请先完成配置。</p>
-          <Button onClick={() => navigate('/setup')}>前往配置页</Button>
-        </CardContent>
-      </Card>
-    )
   }
+
+  const turnCount = messages.filter((m) => m.role === 'candidate').length
 
   return (
     <div className="space-y-4">
       <PosePip />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/70 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
         <div>
-          <p className="text-xs uppercase tracking-widest text-neutral-400">Interview Session</p>
-          <p className="text-sm font-semibold text-neutral-100">
-            {selectedRole} {subRole ? `· ${subRole}` : ''}
-          </p>
+          <p className="text-xs uppercase tracking-widest text-text-muted">面试进行中</p>
+          <p className="text-sm font-medium text-text">AI 模拟面试</p>
         </div>
-
         <div className="flex items-center gap-2">
-          <Button
-            variant={inputMode === 'voice' ? 'default' : 'secondary'}
-            onClick={() => {
-              setInputMode('voice')
-              setStage('listening')
-            }}
-          >
-            <Mic size={14} className="mr-1" />
-            语音模式
+          <Button variant={inputMode === 'voice' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('voice')}>
+            <Mic size={14} className="mr-1" />语音模式
           </Button>
-          <Button
-            variant={inputMode === 'text' ? 'default' : 'secondary'}
-            onClick={() => {
-              setInputMode('text')
-              if (manualVoiceInputActive) {
-                stopManualRecording()
-                setManualVoiceInputActive(false)
-              }
-              interruptPlayback('switch_to_text')
-              stop()
-              setStage('idle')
-            }}
-          >
-            <MicOff size={14} className="mr-1" />
-            文本模式
+          <Button variant={inputMode === 'text' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('text')}>
+            <MicOff size={14} className="mr-1" />文本模式
           </Button>
-          <Button variant="outline" onClick={handleEnd}>
-            结束并生成报告
-          </Button>
+          <Button variant="secondary" size="sm" onClick={handleEnd}>结束面试</Button>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_1.35fr_0.9fr]">
-        <div className="space-y-4">
-          <AudioVisualizer level={micLevel} active={isRecording || isManualRecording} />
-        </div>
-
-        <ChatPanel
-          messages={messages}
-          streamText={streamText}
-          onReadAloud={inputMode === 'text' ? handleReadAloud : undefined}
-          ttsPlayingFor={ttsPlayingFor}
-        />
-
-        <StatusBar
-          stage={stage}
-          connected={connected}
-          turnCount={turnCount}
-          sttPreview={sttPreview}
-          ttsQueueSize={ttsQueueSize}
-          recording={isRecording}
-          ttsProviderLabel={ttsProviderLabel}
-          llmStats={llmStats}
-        />
+      <div className="grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
+        <AudioPanel level={0} active={isRecording || isManualRecording} />
+        <ChatPanel messages={messages} streamText={streamText} onReadAloud={inputMode === 'text' ? handleReadAloud : undefined} ttsPlayingFor={ttsPlayingFor} />
+        <StatusBar stage={stage} connected={connected} turnCount={turnCount} sttPreview={sttPreview} ttsQueueSize={ttsQueueSize} recording={isRecording} ttsProviderLabel={ttsProviderLabel} llmStats={llmStats} />
       </div>
 
       <Card>
         <CardContent className="space-y-3 p-4">
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-text-muted">
             {inputMode === 'voice'
               ? '当前为语音模式，系统自动进行录音与静音检测。'
               : '当前为文本模式，可手动输入回答。点击回复旁的"朗读"按钮可手动触发语音。点击下方麦克风图标可进行语音输入。'}
           </p>
-          {micDenied && micWarningText ? <p className="text-xs text-amber-400">{micWarningText}</p> : null}
           <div className="relative">
             <Textarea
               value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="例如：我曾主导一个高并发系统改造，核心目标是..."
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="输入你的回答..."
               disabled={inputMode !== 'text'}
               className="pr-20"
             />
             <div className="absolute bottom-2 right-2 flex gap-1">
               {inputMode === 'text' && (
-                <Button
-                  variant={manualVoiceInputActive ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={handleManualVoiceInputToggle}
-                  disabled={!connected || isVoiceConverting}
-                  className="h-8 px-2"
-                >
-                  {isVoiceConverting ? (
-                    <span className="text-xs">转换中...</span>
-                  ) : isManualRecording ? (
-                    <>
-                      <span className="mr-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                      <span className="text-xs">停止</span>
-                    </>
-                  ) : (
-                    <>
-                      <Mic size={14} />
-                      <span className="ml-1 text-xs">语音输入</span>
-                    </>
-                  )}
+                <Button variant={manualVoiceActive ? 'primary' : 'secondary'} size="sm" onClick={handleManualVoiceToggle} className="h-8 px-2">
+                  <Mic size={14} />
+                  <span className="ml-1 text-xs">语音</span>
                 </Button>
               )}
             </div>
           </div>
           <div className="flex justify-end">
-            <Button onClick={handleSendText} disabled={inputMode !== 'text' || !input.trim() || !connected || isManualRecording || isVoiceConverting}>
-              <Send size={14} className="mr-1" />
-              发送回答
+            <Button onClick={handleSendText} disabled={inputMode !== 'text' || !input.trim() || !connected}>
+              <Send size={14} className="mr-1" />发送
             </Button>
           </div>
         </CardContent>

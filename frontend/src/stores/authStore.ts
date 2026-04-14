@@ -1,11 +1,15 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { api } from '@/services/api'
 
-import * as auth from '@/services/auth'
+interface User {
+  id: string
+  email: string
+}
 
 interface AuthState {
+  user: User | null
   token: string | null
-  user: auth.User | null
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
@@ -15,30 +19,29 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: null,
       user: null,
+      token: null,
       isAuthenticated: false,
 
-      login: async (email: string, password: string) => {
-        const resp = await auth.login(email, password)
-        set({
-          token: resp.access_token,
-          user: resp.user,
-          isAuthenticated: true,
+      login: async (email, password) => {
+        const data = await api.post<{ access_token: string; user: User }>('/auth/login', {
+          email,
+          password,
         })
+        set({ user: data.user, token: data.access_token, isAuthenticated: true })
       },
 
-      register: async (email: string, password: string) => {
-        await auth.register(email, password)
+      register: async (email, password) => {
+        await api.post('/auth/register', { email, password })
       },
 
       logout: () => {
-        set({ token: null, user: null, isAuthenticated: false })
+        set({ user: null, token: null, isAuthenticated: false })
       },
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ token: state.token, user: state.user }),
-    },
-  ),
+      partialize: (state) => ({ token: state.token, user: state.user, isAuthenticated: state.isAuthenticated }),
+    }
+  )
 )

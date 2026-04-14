@@ -1,107 +1,89 @@
-import axios from 'axios'
+const API_BASE = ''
 
-import type {
-  BehaviorBatchPayload,
-  CreateSessionPayload,
-  GenerateReportResponse,
-  LLMProfilesResponse,
-  ResumeParsePayload,
-  UpdateLLMRuntimePayload,
-  UpdateSessionPayload,
-  UploadResumeResponse,
-} from '@/types/api'
-import type { ConversationMessage, InterviewReport, InterviewSession } from '@/types/interview'
-import { useAuthStore } from '@/stores/authStore'
+class ApiClient {
+  private baseUrl: string
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
-  timeout: 20000,
-})
-
-// Add auth token to all requests
-api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl
   }
-  return config
-})
 
-// Handle 401 by logging out
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      useAuthStore.getState().logout()
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
     }
-    return Promise.reject(error)
-  },
-)
+    const token = this.getToken()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    return headers
+  }
 
-export async function createSession(payload: CreateSessionPayload): Promise<InterviewSession> {
-  const { data } = await api.post<InterviewSession>('/sessions', payload)
-  return data
-}
-
-export async function getSession(sessionId: string): Promise<InterviewSession> {
-  const { data } = await api.get<InterviewSession>(`/sessions/${sessionId}`)
-  return data
-}
-
-export async function updateSession(sessionId: string, payload: UpdateSessionPayload): Promise<InterviewSession> {
-  const { data } = await api.patch<InterviewSession>(`/sessions/${sessionId}`, payload)
-  return data
-}
-
-export async function getMessages(sessionId: string): Promise<ConversationMessage[]> {
-  const { data } = await api.get<ConversationMessage[]>(`/sessions/${sessionId}/messages`)
-  return data
-}
-
-export async function triggerReport(sessionId: string): Promise<GenerateReportResponse> {
-  const { data } = await api.post<GenerateReportResponse>(`/sessions/${sessionId}/report`)
-  return data
-}
-
-export async function getReport(sessionId: string): Promise<InterviewReport | null> {
-  const response = await api.get<InterviewReport | { detail: string }>(`/sessions/${sessionId}/report`, {
-    validateStatus: (status) => status === 200 || status === 202,
-  })
-
-  if (response.status === 202) {
+  private getToken(): string | null {
+    if (typeof window === 'undefined') return null
+    try {
+      const stored = localStorage.getItem('auth-storage')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return parsed.state?.token ?? null
+      }
+    } catch {}
     return null
   }
 
-  return response.data as InterviewReport
+  async get<T>(path: string): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Request failed' }))
+      throw new Error(error.detail || `HTTP ${res.status}`)
+    }
+    return res.json()
+  }
+
+  async post<T>(path: string, body: unknown): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Request failed' }))
+      throw new Error(error.detail || `HTTP ${res.status}`)
+    }
+    return res.json()
+  }
+
+  async patch<T>(path: string, body: unknown): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Request failed' }))
+      throw new Error(error.detail || `HTTP ${res.status}`)
+    }
+    return res.json()
+  }
+
+  async postForm<T>(path: string, formData: FormData): Promise<T> {
+    const headers = this.getHeaders()
+    delete headers['Content-Type']
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Request failed' }))
+      throw new Error(error.detail || `HTTP ${res.status}`)
+    }
+    return res.json()
+  }
 }
 
-export async function uploadResume(sessionId: string, file: File): Promise<UploadResumeResponse> {
-  const form = new FormData()
-  form.append('file', file)
+export const api = new ApiClient(API_BASE)
 
-  const { data } = await api.post<UploadResumeResponse>(`/sessions/${sessionId}/resume`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-
-  return data
-}
-
-export async function getResume(sessionId: string): Promise<ResumeParsePayload> {
-  const { data } = await api.get<ResumeParsePayload>(`/sessions/${sessionId}/resume`)
-  return data
-}
-
-export async function getLLMProfiles(): Promise<LLMProfilesResponse> {
-  const { data } = await api.get<LLMProfilesResponse>('/llm/profiles')
-  return data
-}
-
-export async function updateLLMRuntime(payload: UpdateLLMRuntimePayload): Promise<LLMProfilesResponse> {
-  const { data } = await api.put<LLMProfilesResponse>('/llm/runtime', payload)
-  return data
-}
-
-export async function postBehavior(sessionId: string, payload: BehaviorBatchPayload): Promise<{ status: string }> {
-  const { data } = await api.post<{ status: string }>(`/sessions/${sessionId}/behavior`, payload)
-  return data
-}
+export const getMessages = (sessionId: string) =>
+  api.get<Array<{ id: string; session_id: string; role: string; content: string; timestamp: string; turn_index: number }>>(`/sessions/${sessionId}/messages`)

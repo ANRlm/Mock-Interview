@@ -1,27 +1,31 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
-
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
-import { HomePage } from '@/pages/HomePage'
-import { InterviewPage } from '@/pages/InterviewPage'
 import { LoginPage } from '@/pages/LoginPage'
-import { RegisterPage } from '@/pages/RegisterPage'
-import { ReportPage } from '@/pages/ReportPage'
+import { HomePage } from '@/pages/HomePage'
 import { SetupPage } from '@/pages/SetupPage'
+import { InterviewPage } from '@/pages/InterviewPage'
+import { ReportPage } from '@/pages/ReportPage'
+import { useAuthStore } from '@/stores/authStore'
 
-function App() {
-  return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/setup" element={<SetupPage />} />
-        <Route path="/interview" element={<InterviewPage />} />
-        <Route path="/report/:sessionId" element={<ReportPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
-  )
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  return <>{children}</>
 }
 
-export default App
+export function App() {
+  return (
+    <AppShell>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/setup" element={<ProtectedRoute><SetupPage /></ProtectedRoute>} />
+        <Route path="/interview/:sessionId" element={<ProtectedRoute><InterviewPage /></ProtectedRoute>} />
+        <Route path="/report/:sessionId" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+        <Route path="/report/latest" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+      </Routes>
+    </AppShell>
+  )
+}

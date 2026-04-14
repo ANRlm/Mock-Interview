@@ -356,7 +356,7 @@ async def main() -> None:
         default=float(os.getenv("SMOKE_WS_RECV_TIMEOUT_SECONDS", "120")),
     )
     parser.add_argument("--reset-tts-metrics", action="store_true")
-    parser.add_argument("--email", default=os.getenv("SMOKE_EMAIL", "smoketest@test.local"))
+    parser.add_argument("--email", default=os.getenv("SMOKE_EMAIL", "smoketest@example.com"))
     parser.add_argument("--password", default=os.getenv("SMOKE_PASSWORD", "smoketest123"))
     parser.add_argument("--register", action="store_true", help="Register the test user if not exists")
     args = parser.parse_args()
