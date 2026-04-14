@@ -13,7 +13,7 @@ export function AIVoiceAnimation({ stage }: AIVoiceAnimationProps) {
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="w-4 h-4 bg-primary rounded-full animate-bounce"
+                className="w-4 h-4 bg-primary dark:bg-primary rounded-full animate-bounce"
                 style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.8s' }}
               />
             ))}
@@ -23,11 +23,11 @@ export function AIVoiceAnimation({ stage }: AIVoiceAnimationProps) {
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="absolute w-full h-full border-2 border-primary rounded-full animate-ping opacity-25"
+                className="absolute w-full h-full border-2 border-primary dark:border-primary rounded-full animate-ping opacity-25"
                 style={{ animationDelay: `${i * 0.4}s`, animationDuration: '1.5s' }}
               />
             ))}
-            <div className="w-6 h-6 bg-primary rounded-full z-10" />
+            <div className="w-6 h-6 bg-primary dark:bg-primary rounded-full z-10" />
           </div>
         )}
       </div>

@@ -38,16 +38,16 @@ export function StatusBar({
   llmStats,
 }: StatusBarProps) {
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-surface p-4 h-[200px] space-y-4">
+    <div className="flex flex-col rounded-xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 p-4 h-[200px] space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-muted">连接状态</span>
         {connected ? (
-          <div className="flex items-center gap-1 text-green-600">
+          <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
             <Wifi size={14} />
             <span className="text-xs">已连接</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1 text-red-500">
+          <div className="flex items-center gap-1 text-red-500 dark:text-red-400">
             <WifiOff size={14} />
             <span className="text-xs">断开</span>
           </div>

@@ -8,15 +8,15 @@ interface AudioPanelProps {
 
 export function AudioPanel({ level, active }: AudioPanelProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-surface p-6 h-[200px]">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 p-6 h-[200px]">
       <div className={cn(
         'rounded-full p-6 transition-colors',
-        active ? 'bg-primary/10' : 'bg-surface'
+        active ? 'bg-primary/10 dark:bg-primary/20' : 'bg-surface dark:bg-neutral-800'
       )}>
         {active ? (
           <Mic size={48} className="text-primary animate-pulse" />
         ) : (
-          <MicOff size={48} className="text-text-muted" />
+          <MicOff size={48} className="text-text-muted dark:text-neutral-500" />
         )}
       </div>
       <div className="mt-4 flex items-end gap-1 h-8">
@@ -25,7 +25,7 @@ export function AudioPanel({ level, active }: AudioPanelProps) {
             key={i}
             className={cn(
               'w-1 rounded-full transition-all',
-              active ? 'bg-primary' : 'bg-border',
+              active ? 'bg-primary dark:bg-primary' : 'bg-border dark:bg-neutral-700',
               active && `h-${Math.max(4, Math.min(32, level * 32 / 100 * (i + 1)))}`
             )}
             style={{

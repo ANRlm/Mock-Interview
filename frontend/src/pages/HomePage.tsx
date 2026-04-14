@@ -29,9 +29,12 @@ interface Session {
 export function HomePage() {
   const navigate = useNavigate()
   const [sessions, setSessions] = useState<Session[]>([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get<Session[]>('/sessions').then(setSessions).catch(() => {})
+    api.get<Session[]>('/sessions')
+      .then(setSessions)
+      .catch(() => setError('无法加载最近的面试'))
   }, [])
 
   return (
@@ -42,6 +45,12 @@ export function HomePage() {
       <TechSection />
       <ArchitectureSection />
       <MetricsSection />
+
+      {error && (
+        <div className="text-center py-4 text-sm text-text-muted">
+          {error}
+        </div>
+      )}
 
       {sessions.length > 0 && (
         <div className="space-y-4">

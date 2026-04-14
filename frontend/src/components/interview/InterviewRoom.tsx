@@ -1,5 +1,6 @@
-import { Mic, MicOff, Send } from 'lucide-react'
+import { Mic, MicOff, Send, AlertCircle, Loader2, Mic2, Wifi, WifiOff } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useInterviewStore, type Message } from '@/stores/interviewStore'
 import { ChatPanel } from './ChatPanel'
@@ -34,6 +35,8 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
   const [micMutedByTts, setMicMutedByTts] = useState(false)
   const [ttsPlayingFor, setTtsPlayingFor] = useState<string | null>(null)
   const [manualVoiceActive, setManualVoiceActive] = useState(false)
+  const [micPermission, setMicPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
+  const [requestingMic, setRequestingMic] = useState(false)
   const currentResponseIdRef = { current: '' }
 
   const {
@@ -162,6 +165,25 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
     }
   }, [ttsPlaying, ttsQueueSize, manualTtsStatus, inputMode, mute, unmute, micMutedByTts])
 
+  useEffect(() => {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(s => { s.getTracks().forEach(t => t.stop()); setMicPermission('granted') })
+      .catch(() => setMicPermission('pending'))
+  }, [])
+
+  const requestMicPermission = async () => {
+    setRequestingMic(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach(t => t.stop())
+      setMicPermission('granted')
+    } catch {
+      setMicPermission('denied')
+    } finally {
+      setRequestingMic(false)
+    }
+  }
+
   const handleSendText = () => {
     if (!input.trim()) return
     const text = input.trim()
@@ -212,70 +234,184 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
   const turnCount = messages.filter((m) => m.role === 'candidate').length
 
   return (
-    <div className="space-y-4">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-6 p-6 max-w-7xl mx-auto"
+    >
       <PosePip />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-text-muted">面试进行中</p>
-          <p className="text-sm font-medium text-text">AI 模拟面试</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant={inputMode === 'voice' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('voice')}>
-            <Mic size={14} className="mr-1" />语音模式
-          </Button>
-          <Button variant={inputMode === 'text' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('text')}>
-            <MicOff size={14} className="mr-1" />文本模式
-          </Button>
-          <Button variant="secondary" size="sm" onClick={handleEnd}>结束面试</Button>
-        </div>
-      </div>
-
-{inputMode === 'voice' ? (
-        <div className="grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
-          <AudioPanel level={0} active={isRecording || isManualRecording} />
-          <div className="flex items-center justify-center rounded-xl border border-border bg-surface">
-            <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 px-6 py-4 shadow-geist-md"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Mic2 size={22} className="text-primary" />
           </div>
-          <StatusBar stage={stage} connected={connected} turnCount={turnCount} sttPreview={sttPreview} ttsQueueSize={ttsQueueSize} recording={isRecording} ttsProviderLabel={ttsProviderLabel} llmStats={llmStats} />
+          <div>
+            <p className="text-xs uppercase tracking-widest text-text-muted">面试进行中</p>
+            <p className="text-base font-semibold text-text">AI 模拟面试</p>
+          </div>
         </div>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
-          <AudioPanel level={0} active={isRecording || isManualRecording} />
-          <ChatPanel messages={messages} streamText={streamText} onReadAloud={inputMode === 'text' ? handleReadAloud : undefined} ttsPlayingFor={ttsPlayingFor} inputMode={inputMode} stage={stage} />
-          <StatusBar stage={stage} connected={connected} turnCount={turnCount} sttPreview={sttPreview} ttsQueueSize={ttsQueueSize} recording={isRecording} ttsProviderLabel={ttsProviderLabel} llmStats={llmStats} />
+        
+        <div className="flex items-center gap-4">
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+            connected 
+              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+          }`}>
+            {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
+            {connected ? '已连接' : '未连接'}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button 
+              variant={inputMode === 'voice' ? 'primary' : 'secondary'} 
+              size="sm" 
+              onClick={() => {
+                if (inputMode !== 'voice') {
+                  if (micPermission !== 'granted') {
+                    requestMicPermission()
+                  }
+                  setInputMode('voice')
+                }
+              }}
+              disabled={requestingMic}
+            >
+              {requestingMic ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Mic size={14} className="mr-1" />}
+              语音模式
+            </Button>
+            <Button variant={inputMode === 'text' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('text')}>
+              <MicOff size={14} className="mr-1" />文本模式
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleEnd}>结束面试</Button>
+          </div>
         </div>
-      )}
+      </motion.div>
 
-      {inputMode === 'text' && (
-        <Card>
-          <CardContent className="space-y-3 p-4">
-            <p className="text-xs text-text-muted">
-              当前为文本模式，可手动输入回答。点击回复旁的"朗读"按钮可手动触发语音。点击下方麦克风图标可进行语音输入。
-            </p>
-            <div className="relative">
-              <Textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="输入你的回答..."
-                disabled={inputMode !== 'text'}
-                className="pr-20"
-              />
-              <div className="absolute bottom-2 right-2 flex gap-1">
-                <Button variant={manualVoiceActive ? 'primary' : 'secondary'} size="sm" onClick={handleManualVoiceToggle} className="h-8 px-2">
-                  <Mic size={14} />
-                  <span className="ml-1 text-xs">语音</span>
-                </Button>
-              </div>
+      <AnimatePresence>
+        {inputMode === 'voice' && micPermission !== 'granted' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-5 py-4 flex items-center gap-4"
+          >
+            <AlertCircle size={22} className="text-amber-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                {micPermission === 'denied' ? '麦克风权限被拒绝' : '正在请求麦克风权限'}
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                {micPermission === 'denied' 
+                  ? '请在浏览器设置中允许麦克风访问，然后刷新页面重试' 
+                  : '请在弹出窗口中点击"允许"按钮授予麦克风权限'}
+              </p>
             </div>
-            <div className="flex justify-end">
-              <Button onClick={handleSendText} disabled={!input.trim() || !connected}>
-                <Send size={14} className="mr-1" />发送
+            {micPermission === 'denied' && (
+              <Button variant="outline" size="sm" onClick={requestMicPermission}>
+                重试
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={inputMode}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+          className="grid gap-6 lg:grid-cols-[280px_1fr_280px]"
+        >
+          <div className="space-y-4">
+            <AudioPanel level={0} active={isRecording || isManualRecording} />
+          </div>
+
+          <div className="space-y-4">
+            {inputMode === 'voice' ? (
+              <div className="flex items-center justify-center rounded-2xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 min-h-[350px] shadow-geist-md">
+                <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
+              </div>
+            ) : (
+              <ChatPanel 
+                messages={messages} 
+                streamText={streamText} 
+                onReadAloud={handleReadAloud} 
+                ttsPlayingFor={ttsPlayingFor} 
+                inputMode={inputMode} 
+                stage={stage} 
+              />
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <StatusBar 
+              stage={stage} 
+              connected={connected} 
+              turnCount={turnCount} 
+              sttPreview={sttPreview} 
+              ttsQueueSize={ttsQueueSize} 
+              recording={isRecording} 
+              ttsProviderLabel={ttsProviderLabel} 
+              llmStats={llmStats} 
+            />
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {inputMode === 'text' && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card className="border border-border dark:border-neutral-700 dark:bg-neutral-900 shadow-geist-md">
+              <CardContent className="space-y-4 p-5">
+                <div className="flex items-start gap-4">
+                  <div className="flex-1">
+                    <Textarea
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="输入你的回答..."
+                      disabled={!connected}
+                      className="min-h-[100px] resize-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      variant={manualVoiceActive ? 'primary' : 'secondary'} 
+                      size="sm" 
+                      onClick={handleManualVoiceToggle}
+                      className="h-10 px-3"
+                    >
+                      <Mic size={16} />
+                    </Button>
+                    <Button 
+                      onClick={handleSendText} 
+                      disabled={!input.trim() || !connected}
+                      className="h-10"
+                    >
+                      <Send size={16} className="mr-1" />发送
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-text-muted">
+                  当前为文本模式，支持语音输入。点击麦克风图标进行语音输入。
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }

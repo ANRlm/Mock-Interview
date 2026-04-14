@@ -1,11 +1,20 @@
 import { useState, useEffect, useRef, type DragEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Upload, FileText, Settings } from 'lucide-react'
+import { Upload, FileText, Settings, Code, Briefcase, Stethoscope, GraduationCap } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { api } from '@/services/api'
+import { cn } from '@/lib/utils'
+
+const roles = [
+  { id: 'programmer', label: '程序员', icon: Code, desc: '前端/后端/全栈开发' },
+  { id: 'lawyer', label: '律师', icon: Briefcase, desc: '法律咨询与诉讼' },
+  { id: 'doctor', label: '医生', icon: Stethoscope, desc: '临床医学与诊断' },
+  { id: 'teacher', label: '教师', icon: GraduationCap, desc: '教育教学技能' },
+]
 
 export function SetupPage() {
   const navigate = useNavigate()
@@ -13,7 +22,7 @@ export function SetupPage() {
   const [jobRole, setJobRole] = useState<string>('programmer')
   const [subRole, setSubRole] = useState('')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
-  const [resumeStatus] = useState<'empty' | 'uploaded'>('empty')
+  const [resumeStatus, setResumeStatus] = useState<'empty' | 'uploaded'>('empty')
   const [uploading, setUploading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
@@ -53,6 +62,7 @@ export function SetupPage() {
       const formData = new FormData()
       formData.append('file', resumeFile)
       await api.postForm('/sessions/_resume_temp_/resume', formData)
+      setResumeStatus('uploaded')
     } catch {
     } finally {
       setUploading(false)
@@ -80,104 +90,209 @@ export function SetupPage() {
     }
   }
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  }
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold text-text">准备面试</h1>
-        <p className="text-text-secondary">上传简历并配置面试参数</p>
-      </div>
+    <motion.div 
+      className="max-w-2xl mx-auto space-y-8 p-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.div className="text-center space-y-3" variants={itemVariants}>
+        <h1 className="text-4xl font-bold text-text">准备面试</h1>
+        <p className="text-lg text-text-secondary">上传简历并配置面试参数</p>
+      </motion.div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <FileText size={20} />
-            <h2 className="text-lg font-medium">简历上传</h2>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div
-            className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.txt,.md"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-            {resumeFile ? (
-              <div className="space-y-2">
-                <p className="font-medium text-text">{resumeFile.name}</p>
-                <p className="text-sm text-text-muted">
-                  {(resumeFile.size / 1024).toFixed(1)} KB
-                </p>
+      <motion.div variants={itemVariants}>
+        <Card className="shadow-geist-md">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Settings size={20} className="text-primary" />
               </div>
-            ) : (
-              <div className="space-y-2">
-                <Upload size={32} className="mx-auto text-text-muted" />
-                <p className="text-text-secondary">
-                  拖拽简历文件或点击选择
-                </p>
-                <p className="text-sm text-text-muted">
-                  支持 PDF、TXT、MD 格式
-                </p>
+              <div>
+                <h2 className="text-lg font-semibold">选择职位类型</h2>
+                <p className="text-sm text-text-muted">选择你想要练习的职位</p>
               </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {roles.map((role, index) => {
+                const Icon = role.icon
+                const isSelected = jobRole === role.id
+                return (
+                  <motion.button
+                    key={role.id}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => setJobRole(role.id)}
+                    className={cn(
+                      'flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition-all text-center',
+                      isSelected
+                        ? 'border-primary bg-primary/10 text-primary shadow-geist-md'
+                        : 'border-border bg-surface hover:border-primary/50 text-text hover:shadow-geist-sm'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-12 h-12 rounded-xl flex items-center justify-center transition-colors',
+                      isSelected ? 'bg-primary/20' : 'bg-surface'
+                    )}>
+                      <Icon size={26} />
+                    </div>
+                    <span className="font-semibold text-base">{role.label}</span>
+                    <span className="text-xs text-text-muted">{role.desc}</span>
+                  </motion.button>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <Card className="shadow-geist-md">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <FileText size={20} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">简历上传</h2>
+                <p className="text-sm text-text-muted">上传你的简历让 AI 更好地了解你</p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <motion.div
+              className={cn(
+                'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all',
+                'hover:border-primary/50 hover:bg-primary/5',
+                resumeFile ? 'border-primary/50 bg-primary/5' : 'border-border'
+              )}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.txt,.md"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              {resumeFile ? (
+                <div className="space-y-3">
+                  <div className="w-16 h-16 rounded-xl bg-primary/10 mx-auto flex items-center justify-center">
+                    <FileText size={28} className="text-primary" />
+                  </div>
+                  <p className="font-semibold text-text text-lg">{resumeFile.name}</p>
+                  <p className="text-sm text-text-muted">
+                    {(resumeFile.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="w-16 h-16 rounded-xl bg-surface mx-auto flex items-center justify-center">
+                    <Upload size={28} className="text-text-muted" />
+                  </div>
+                  <p className="font-medium text-text">
+                    拖拽简历文件或点击选择
+                  </p>
+                  <p className="text-sm text-text-muted">
+                    支持 PDF、TXT、MD 格式
+                  </p>
+                </div>
+              )}
+            </motion.div>
+            {resumeFile && (
+              <motion.div 
+                className="flex items-center justify-between"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+              >
+                <Badge variant={resumeStatus === 'uploaded' ? 'success' : 'default'}>
+                  {resumeStatus === 'uploaded' ? '已解析' : '待上传'}
+                </Badge>
+                <Button variant="secondary" size="sm" onClick={handleUploadResume} loading={uploading}>
+                  上传简历
+                </Button>
+              </motion.div>
             )}
-          </div>
-          {resumeFile && (
-            <div className="flex items-center justify-between">
-              <Badge variant={resumeStatus === 'uploaded' ? 'success' : 'default'}>
-                {resumeStatus === 'uploaded' ? '已解析' : '待上传'}
-              </Badge>
-              <Button variant="secondary" size="sm" onClick={handleUploadResume} loading={uploading}>
-                上传简历
-              </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <Card className="shadow-geist-md">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Settings size={20} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">面试配置</h2>
+                <p className="text-sm text-text-muted">自定义你的面试体验</p>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Settings size={20} />
-            <h2 className="text-lg font-medium">面试配置</h2>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-text">子角色（可选）</label>
-            <Input
-              placeholder="例如：前端工程师"
-              value={subRole}
-              onChange={(e) => setSubRole(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-text">LLM 配置</label>
-            <div className="rounded-md border border-border bg-surface p-4 text-sm text-text-muted">
-              {Object.keys(llmConfig).length > 0
-                ? JSON.stringify(llmConfig, null, 2)
-                : '使用默认配置'}
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-3">
+              <label className="text-sm font-semibold text-text">子角色（可选）</label>
+              <Input
+                placeholder="例如：前端工程师、全栈开发"
+                value={subRole}
+                onChange={(e) => setSubRole(e.target.value)}
+              />
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+            <div className="space-y-3">
+              <label className="text-sm font-semibold text-text">LLM 配置</label>
+              <div className="rounded-xl border border-border bg-surface p-4">
+                {Object.keys(llmConfig).length > 0 ? (
+                  <pre className="text-xs text-text-muted overflow-x-auto">{JSON.stringify(llmConfig, null, 2)}</pre>
+                ) : (
+                  <p className="text-sm text-text-muted">使用默认配置</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-      <div className="flex justify-center gap-4">
-        <Button variant="secondary" onClick={() => navigate('/')}>
-          返回
+      {error && (
+        <motion.div 
+          className="text-center py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </motion.div>
+      )}
+
+      <motion.div className="flex justify-center gap-4" variants={itemVariants}>
+        <Button variant="secondary" size="lg" onClick={() => navigate('/')}>
+          返回首页
         </Button>
-        <Button onClick={handleStartInterview} loading={creating}>
+        <Button size="lg" onClick={handleStartInterview} loading={creating}>
           开始面试
         </Button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

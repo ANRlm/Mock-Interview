@@ -130,12 +130,12 @@ export function ArchitectureSection() {
                 <div className="text-xs text-text-muted mt-1">高准确度语音识别</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-amber-500 mb-1">LLM</div>
+                <div className="text-2xl font-bold text-amber-500 dark:text-amber-400 mb-1">LLM</div>
                 <div className="text-sm text-text-secondary">qwen3:8b</div>
                 <div className="text-xs text-text-muted mt-1">本地 GPU 推理</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-emerald-500 mb-1">TTS</div>
+                <div className="text-2xl font-bold text-emerald-500 dark:text-emerald-400 mb-1">TTS</div>
                 <div className="text-sm text-text-secondary">CosyVoice2</div>
                 <div className="text-xs text-text-muted mt-1">低延迟语音合成</div>
               </div>

@@ -53,9 +53,7 @@ export function NavBar() {
               <Link to="/login">
                 <Button variant="ghost" size="sm" className="text-xs">登录</Button>
               </Link>
-              <Link to="/register">
-                <Button variant="secondary" size="sm" className="text-xs">注册</Button>
-              </Link>
+
             </div>
           )}
         </div>
