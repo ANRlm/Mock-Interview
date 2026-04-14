@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     LLM_BASE_URL: str = "http://localhost:11434/v1"
     LLM_API_KEY: str = "ollama"
-    LLM_MODEL: str = "qwen3.5:2b"
+    LLM_MODEL: str = "qwen3:8b"
     LLM_TIMEOUT_SECONDS: int = 90
     LLM_DISABLE_THINKING: bool = True
     LLM_DEFAULT_PROFILE: str = "local"
