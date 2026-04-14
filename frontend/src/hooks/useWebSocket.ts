@@ -9,10 +9,17 @@ interface UseWebSocketOptions {
 export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
+  const pingTimeoutRef = useRef<number | null>(null)
   const token = useAuthStore((s) => s.token)
   const reconnectAttemptsRef = useRef(0)
   const maxReconnectAttempts = 5
+  const disconnectDebounceRef = useRef<number | null>(null)
+
   const [connected, setConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
+
+  const onMessageRef = useRef(onMessage)
+  onMessageRef.current = onMessage
 
   const connect = useCallback(() => {
     if (!token) return
@@ -21,9 +28,12 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
+    setIsConnecting(true)
+
     ws.onopen = () => {
       reconnectAttemptsRef.current = 0
       setConnected(true)
+      setIsConnecting(false)
       startPing()
     }
 
@@ -31,32 +41,43 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
       try {
         const payload = JSON.parse(event.data)
         if (payload.type === 'pong') return
-        onMessage(payload)
+        onMessageRef.current(payload)
       } catch {
       }
     }
 
     ws.onclose = () => {
-      setConnected(false)
-      if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectAttemptsRef.current++
-          connect()
-        }, 1000 * Math.min(30, 2 ** reconnectAttemptsRef.current))
+      if (disconnectDebounceRef.current) {
+        clearTimeout(disconnectDebounceRef.current)
       }
+      disconnectDebounceRef.current = window.setTimeout(() => {
+        setConnected(false)
+        setIsConnecting(false)
+
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectTimeoutRef.current = window.setTimeout(() => {
+            reconnectAttemptsRef.current++
+            connect()
+          }, 1000 * Math.min(30, 2 ** reconnectAttemptsRef.current))
+        }
+      }, 500)
     }
 
     ws.onerror = () => {
       ws.close()
     }
-  }, [sessionId, token, onMessage])
+  }, [sessionId, token])
 
   const startPing = useCallback(() => {
+    if (pingTimeoutRef.current) {
+      clearTimeout(pingTimeoutRef.current)
+    }
+
     const ping = () => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'ping' }))
       }
-      setTimeout(ping, 30000)
+      pingTimeoutRef.current = window.setTimeout(ping, 30000)
     }
     ping()
   }, [])
@@ -66,6 +87,12 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+      }
+      if (pingTimeoutRef.current) {
+        clearTimeout(pingTimeoutRef.current)
+      }
+      if (disconnectDebounceRef.current) {
+        clearTimeout(disconnectDebounceRef.current)
       }
       wsRef.current?.close()
     }
@@ -92,5 +119,5 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
     return send({ type: 'interrupt', reason })
   }, [send])
 
-  return { send, sendAudioChunk, sendAudioEnd, sendInterrupt, connected }
+  return { send, sendAudioChunk, sendAudioEnd, sendInterrupt, connected, isConnecting }
 }
