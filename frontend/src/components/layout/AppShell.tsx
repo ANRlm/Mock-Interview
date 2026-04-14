@@ -27,9 +27,9 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-bg text-text">
       <NavBar />
-      <main className="mx-auto w-full max-w-7xl px-4 py-8">
+      <div className="w-full">
         {children ?? <Outlet />}
-      </main>
+      </div>
     </div>
   )
 }
