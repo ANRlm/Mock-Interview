@@ -9,7 +9,7 @@ const ANIMATION_URL = 'https://assets2.lottiefiles.com/packages/lf20_jcikwtux.js
 
 function AnimatedPlaceholder() {
   return (
-    <div className="w-80 h-80 relative">
+    <div className="w-64 h-64 relative">
       <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
       <div className="absolute inset-8 rounded-full bg-gradient-to-br from-primary/10 to-transparent animate-pulse" />
     </div>
@@ -49,7 +49,7 @@ function HeroAnimationInner() {
   }
 
   return (
-    <div className="w-80 h-80">
+    <div className="w-64 h-64">
       <LottieAnimation animationData={animationData} />
     </div>
   )
@@ -75,9 +75,9 @@ const stats = [
 
 export function HeroSection() {
   return (
-    <section className="w-full min-h-screen bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900 relative overflow-hidden">
+    <section className="w-full min-h-[60vh] bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900 relative overflow-hidden">
       <motion.div
-        className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[100px]"
+        className="absolute top-1/4 left-1/4 w-[350px] h-[350px] bg-primary/10 rounded-full blur-[100px]"
         animate={{
           scale: [1, 1.2, 1],
           opacity: [0.3, 0.5, 0.3],
@@ -89,7 +89,7 @@ export function HeroSection() {
         }}
       />
       <motion.div
-        className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[80px]"
+        className="absolute bottom-1/4 right-1/4 w-[280px] h-[280px] bg-primary/5 rounded-full blur-[80px]"
         animate={{
           scale: [1.2, 1, 1.2],
           opacity: [0.3, 0.5, 0.3],
@@ -100,21 +100,9 @@ export function HeroSection() {
           ease: 'easeInOut',
         }}
       />
-      <motion.div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px]"
-        animate={{
-          scale: [1, 1.1, 1],
-          opacity: [0.2, 0.4, 0.2],
-        }}
-        transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-      />
 
-      <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+      <div className="max-w-6xl mx-auto px-6 lg:px-8 py-12 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-8 items-center">
           <div className="text-center lg:text-left">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -127,7 +115,7 @@ export function HeroSection() {
             </motion.div>
 
             <motion.h1
-              className="text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-tight"
+              className="text-4xl lg:text-5xl font-bold tracking-tight mb-6 leading-tight"
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
@@ -138,7 +126,7 @@ export function HeroSection() {
             </motion.h1>
 
             <motion.p
-              className="text-lg text-text-secondary mb-8 max-w-lg"
+              className="text-base text-text-secondary mb-8 max-w-lg"
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
@@ -154,7 +142,7 @@ export function HeroSection() {
             >
               <motion.a
                 href="/setup"
-                className="inline-flex items-center justify-center px-10 py-4 rounded-xl bg-primary text-white text-lg font-medium hover:bg-primary-hover transition-colors"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-primary text-white text-base font-medium hover:bg-primary-hover transition-colors"
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -166,7 +154,7 @@ export function HeroSection() {
 
               <motion.a
                 href="#features"
-                className="inline-flex items-center justify-center px-10 py-4 rounded-xl border-2 border-border text-text text-lg font-medium hover:bg-surface transition-colors"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-xl border-2 border-border text-text text-base font-medium hover:bg-surface transition-colors"
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -175,14 +163,14 @@ export function HeroSection() {
             </motion.div>
 
             <motion.div
-              className="mt-12 grid grid-cols-3 gap-6"
+              className="mt-6 grid grid-cols-3 gap-6"
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
               {stats.map((stat, index) => (
                 <div key={index} className="text-center lg:text-left">
-                  <div className="text-2xl lg:text-3xl font-bold text-primary">{stat.value}</div>
+                  <div className="text-xl font-bold text-primary">{stat.value}</div>
                   <div className="text-sm text-text-muted">{stat.label}</div>
                 </div>
               ))}

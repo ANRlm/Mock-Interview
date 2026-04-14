@@ -58,7 +58,7 @@ const steps = [
 
 export function HowItWorksSection() {
   return (
-    <section className="w-full py-24 bg-bg relative overflow-hidden">
+    <section className="w-full py-16 bg-bg relative overflow-hidden">
       <div className="absolute inset-0 bg-grid-pattern opacity-5" />
 
       <div className="max-w-6xl mx-auto px-6">
