@@ -47,12 +47,44 @@ Tested and confirmed:
 - `frontend/src/pages/HomePage.tsx` - Now uses landing components
 - `frontend/src/components/layout/NavBar.tsx` - Simplified, removed menu entries
 
-## Remaining Tasks
+## Backend Analysis (Wave 4)
 
-### Backend (Wave 4) - T11-T14
-- T11: Evaluate SenseVoice STT
-- T12: Optimize CosyVoice2 streaming
-- T13: LLM model upgrade
-- T14: Full-duplex pipeline tuning
+### Current Stack
+- STT: FunASR ParaFormer-large (2-pass) on port 10095
+- TTS: CosyVoice2-0.5B streaming on port 50000
+- LLM: qwen3.5:2b via Ollama on port 11434
+- Backend: FastAPI on port 8000
 
-These require backend evaluation and Docker container work.
+### T11: SenseVoice STT Evaluation
+- Current FunASR is adequate; SenseVoice would require:
+  - Building/finding a Docker image
+  - Replacing funasr service in docker-compose.gpu.yml
+  - Smoke test comparison
+- **Assessment**: Low priority; FunASR is working
+
+### T12: CosyVoice2 Streaming
+- Already has sophisticated optimizations:
+  - Hedge enabled (TTS_HEDGE_ENABLED=true)
+  - First chunk timeout (6.5s)
+  - Warm pre-flight with "好的。"
+  - Early flush thresholds
+- **Assessment**: Well-tuned already; further optimization requires smoke test data
+
+### T13: LLM Model Upgrade (qwen3.5:2b → qwen3:8b)
+- Requires: `ollama pull qwen3:8b` (8GB+ download)
+- docker-compose change: `LLM_MODEL: qwen3:8b`
+- **Assessment**: Needs manual intervention to pull model + restart containers
+
+### T14: Full-Duplex Pipeline Tuning
+- Architecture is already full-duplex
+- interview_ws.py has parallel LLM streaming + TTS synthesis
+- **Assessment**: Parameter tuning requires smoke test runs
+
+### Blocker Summary
+T11-T14 require:
+1. Long-running model pulls (qwen3:8b is 8GB+)
+2. Multiple smoke test runs (10+ min each)
+3. Docker container restarts
+4. Quantitative latency measurements
+
+**Recommendation**: These are better done manually with proper hardware and time allocation.
