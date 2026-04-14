@@ -232,7 +232,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
 
       <div className="grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
         <AudioPanel level={0} active={isRecording || isManualRecording} />
-        <ChatPanel messages={messages} streamText={streamText} onReadAloud={inputMode === 'text' ? handleReadAloud : undefined} ttsPlayingFor={ttsPlayingFor} />
+        <ChatPanel messages={messages} streamText={streamText} onReadAloud={inputMode === 'text' ? handleReadAloud : undefined} ttsPlayingFor={ttsPlayingFor} inputMode={inputMode} stage={stage} />
         <StatusBar stage={stage} connected={connected} turnCount={turnCount} sttPreview={sttPreview} ttsQueueSize={ttsQueueSize} recording={isRecording} ttsProviderLabel={ttsProviderLabel} llmStats={llmStats} />
       </div>
 

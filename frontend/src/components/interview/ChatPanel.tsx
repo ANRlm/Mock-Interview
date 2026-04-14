@@ -3,15 +3,18 @@ import { Play, Square } from 'lucide-react'
 import { type Message } from '@/stores/interviewStore'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { AIVoiceAnimation } from './AIVoiceAnimation'
 
 interface ChatPanelProps {
   messages: Message[]
   streamText: string
   onReadAloud?: (messageId: string, text: string) => void
   ttsPlayingFor?: string | null
+  inputMode?: 'voice' | 'text'
+  stage?: 'idle' | 'listening' | 'thinking' | 'speaking'
 }
 
-export function ChatPanel({ messages, streamText, onReadAloud, ttsPlayingFor }: ChatPanelProps) {
+export function ChatPanel({ messages, streamText, onReadAloud, ttsPlayingFor, inputMode, stage }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -50,7 +53,13 @@ export function ChatPanel({ messages, streamText, onReadAloud, ttsPlayingFor }: 
             </div>
           </div>
         ))}
-        {streamText && (
+        {inputMode === 'voice' && (stage === 'thinking' || stage === 'speaking') ? (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-bg border border-border text-text">
+              <AIVoiceAnimation stage={stage} />
+            </div>
+          </div>
+        ) : streamText && (
           <div className="flex justify-start">
             <div className="max-w-[80%] rounded-lg px-4 py-3 bg-bg border border-border text-text">
               <p className="text-sm whitespace-pre-wrap">{streamText}<span className="animate-pulse">▊</span></p>

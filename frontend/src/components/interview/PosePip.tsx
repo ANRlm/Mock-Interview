@@ -26,7 +26,11 @@ export function PosePip() {
   const [position, setPosition] = useState<Position>(() => getStoredPosition())
   const [dragging, setDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const [cameraPermission, setCameraPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
   const containerRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setDragging(true)
@@ -61,6 +65,31 @@ export function PosePip() {
     }
   }, [dragging, handleMouseMove, handleMouseUp])
 
+  useEffect(() => {
+    async function requestCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        setCameraStream(stream)
+        setCameraPermission('granted')
+      } catch (err) {
+        setCameraError(err instanceof Error ? err.message : '无法访问摄像头')
+        setCameraPermission('denied')
+      }
+    }
+    requestCamera()
+  }, [])
+
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream
+    }
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [cameraStream])
+
   return (
     <div
       ref={containerRef}
@@ -87,8 +116,16 @@ export function PosePip() {
       </div>
       {!minimized && (
         <div className="p-3 space-y-2">
-          <div className="aspect-video bg-bg rounded-md flex items-center justify-center">
-            <span className="text-xs text-text-muted">摄像头画面</span>
+          <div className="aspect-video bg-bg rounded-md flex items-center justify-center overflow-hidden">
+            {cameraPermission === 'pending' ? (
+              <span className="text-xs text-text-muted">请求摄像头权限...</span>
+            ) : cameraPermission === 'denied' ? (
+              <span className="text-xs text-text-muted">{cameraError || '摄像头访问被拒绝'}</span>
+            ) : cameraStream ? (
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xs text-text-muted">摄像头画面</span>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="bg-bg rounded px-2 py-1">
