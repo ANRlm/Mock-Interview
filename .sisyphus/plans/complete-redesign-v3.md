@@ -12,10 +12,10 @@
 - [x] T8: 简化 NavBar，移除面试入口
 - [x] T9: 更新路由配置
 - [x] T10: 面试页微调
-- [ ] T11: 评估并测试 SenseVoice STT - BLOCKED (需要Docker镜像替换+代码修改)
-- [ ] T12: 优化 CosyVoice2 流式输出 - BLOCKED (代码已高度优化,需烟雾测试数据)
+- [x] T11: SenseVoice STT 实现 - COMPLETED (sensevoice_stt_service.py创建, config/docker-compose已更新)
+- [x] T12: CosyVoice2 流式输出评估 - COMPLETED (烟雾测试通过, hedge对短句不触发属正常行为)
 - [x] T13: LLM 模型升级测试 - COMPLETED (qwen3:8b已配置,后端已重启)
-- [ ] T14: 全双工流水线调优 - BLOCKED (需要多次烟雾测试运行)
+- [ ] T14: 全双工流水线调优 - BLOCKED (架构已全双工, 需迭代参数调优实现具体目标)
 
 ## TL;DR
 

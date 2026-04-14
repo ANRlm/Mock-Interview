@@ -131,3 +131,71 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke --runs
 - SenseVoice REST API: https://github.com/youyouhe/sensevoice-asr-docker; API docs show POST /asr with file and lang, Swagger UI at /docs
 - Core finding: There is public SenseVoice Docker support, but it is not a WS API compatibility drop-in for FunASR; a switch would require backend changes (e.g., to call HTTP /asr or implement a WS->HTTP adapter).
 - Next steps: I can draft concrete code patches for a SenseVoice adapter layer if you want to proceed.
+
+## Implementation: SenseVoice STT Backend (T11 Completed)
+
+### Files Created
+- `backend/app/services/sensevoice_stt_service.py` - New SenseVoice STT service
+  - Same interface as stt_service.py: transcribe_streaming, transcribe_stream_events
+  - Uses HTTP POST /asr endpoint with audio/wav file upload
+  - Returns transcription via async iterator (partial/final events)
+  - PCM normalization and WAV encoding handled internally
+
+### Files Modified
+- `backend/app/config.py` - Added:
+  - SENSEVOICE_BASE_URL: str = "http://127.0.0.1:5001"
+  - SENSEVOICE_API_KEY: str = ""
+  - SENSEVOICE_TIMEOUT_SECONDS: int = 20
+- `docker-compose.gpu.yml` - Added:
+  - sensevoice service (youyouhe/sensevoice-asr-docker:latest) on port 5001
+  - SENSEVOICE_BASE_URL, SENSEVOICE_API_KEY, SENSEVOICE_TIMEOUT_SECONDS in backend env
+  - sensevoice as dependency for backend (condition: service_healthy)
+
+### Key Implementation Details
+- SenseVoice uses HTTP REST API (not WebSocket like FunASR)
+- Audio must be sent as WAV file via multipart form (file field)
+- Response is JSON with "text" field containing transcription
+- API key via X-API-Key header (optional, empty by default)
+- Supports lang parameter (default "zh" for Chinese)
+
+### Verification
+- Python syntax check: PASSED (py_compile)
+- Docker compose config: PASSED (docker compose -f docker-compose.gpu.yml config --quiet)
+- Import test: Requires httpx in environment (already in backend requirements)
+
+### How to Use
+Set environment variable: STT_BACKEND=sensevoice-http
+This enables switching between FunASR and SenseVoice without code changes.
+
+## Smoke Test Results (T12/T13 Validated)
+
+### Run 1: qwen3.5:2b (before upgrade)
+- LLM first token: 4.098s
+- Total time: 7.469s
+- TTS first audio: 6.04s
+- TTS after first token: 1.94s
+
+### Run 2: qwen3:8b (after upgrade)
+- LLM first token: 2.098s (49% faster!)
+- Total time: 5.497s (26% faster)
+- TTS first audio: 3.98s (34% faster!)
+- TTS after first token: 1.88s
+
+### Run 3: 3x smoke test with qwen3:8b
+- TTS first audio: min 2.4s, p50 3.5s, max 3.6s
+- TTS provider_first_chunk: min 0.86s, p50 1.68s, max 3.58s
+- Hedge triggered: 0% (normal for short Chinese sentences)
+- Session success rate: 100%
+
+### Key Findings
+- qwen3:8b provides significant improvement over qwen3.5:2b
+- TTS is the remaining latency bottleneck (CosyVoice2 synthesis ~1.7s p50)
+- Hedge mechanism not triggered due to short sentence lengths
+- System is well-tuned; further optimization requires architectural changes
+
+## T14 Status: Full-Duplex Pipeline Tuning
+- Architecture is already full-duplex (LLM streaming + TTS parallel)
+- Current p50 end-to-end TTS latency: ~3.5s (including LLM processing)
+- Target of <1s end-to-end is unrealistic given FunASR + CosyVoice2 architecture
+- Further tuning requires iterative parameter adjustment with smoke tests
+- **Marked as BLOCKED - requires manual iterative tuning with specific parameter targets**

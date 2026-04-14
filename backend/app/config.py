@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     FUNASR_USE_ITN: bool = True
     FUNASR_EXTRA_PAYLOAD: str = "{}"
 
+    SENSEVOICE_BASE_URL: str = "http://127.0.0.1:5001"
+    SENSEVOICE_API_KEY: str = ""
+    SENSEVOICE_TIMEOUT_SECONDS: int = 20
+
     TTS_BACKEND: str = "cosyvoice2-http"
     COSYVOICE_BASE_URL: str = "http://127.0.0.1:50000"
     COSYVOICE_TTS_PATH: str = "/inference_sft"
