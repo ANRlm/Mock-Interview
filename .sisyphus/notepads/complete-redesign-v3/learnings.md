@@ -22,6 +22,8 @@ Tested and confirmed:
 - T6: ResumeUploader component created ✅
 - T7: ModelSelector + SpeedSlider components created ✅
 - T8: NavBar simplified, removed interview/report entries ✅
+- T9: Routes - No changes needed (App.tsx routes work as-is) ✅
+- T10: InterviewPage - Already functional, no changes needed ✅
 
 ### Build Verification
 - `npm run build` passes after fixes
