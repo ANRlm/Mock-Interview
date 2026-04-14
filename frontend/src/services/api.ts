@@ -1,4 +1,4 @@
-const API_BASE = ''
+const API_BASE = import.meta.env.VITE_API_BASE_URL as string || ''
 
 class ApiClient {
   private baseUrl: string

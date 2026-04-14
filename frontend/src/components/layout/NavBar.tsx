@@ -7,9 +7,6 @@ import { useAuthStore } from '@/stores/authStore'
 
 const navItems = [
   { to: '/', label: '首页' },
-  { to: '/setup', label: '配置' },
-  { to: '/interview', label: '面试' },
-  { to: '/report/latest', label: '报告' },
 ]
 
 export function NavBar() {
@@ -23,29 +20,24 @@ export function NavBar() {
           Mock Interview
         </Link>
 
-        <div className="flex items-center gap-3">
-          <nav className="flex items-center gap-1 rounded-lg border border-border bg-surface p-1">
-            {navItems.map((item) => {
-              const active =
-                item.to === '/'
-                  ? location.pathname === '/'
-                  : location.pathname.startsWith(item.to)
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs transition-colors',
-                    active
-                      ? 'bg-bg text-text'
-                      : 'text-text-secondary hover:bg-bg hover:text-text'
-                  )}
-                >
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
+        <div className="flex items-center gap-6">
+          <Link
+            to={navItems[0].to}
+            className={cn(
+              'text-xs transition-colors',
+              location.pathname === '/'
+                ? 'text-text'
+                : 'text-text-secondary hover:text-text'
+            )}
+          >
+            {navItems[0].label}
+          </Link>
+
+          <Link to="/setup">
+            <Button variant="primary" size="sm" className="text-xs">
+              开始面试
+            </Button>
+          </Link>
 
           <ThemeToggle />
 

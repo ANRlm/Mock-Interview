@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 
 interface UseWebSocketOptions {
@@ -12,19 +12,18 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
   const token = useAuthStore((s) => s.token)
   const reconnectAttemptsRef = useRef(0)
   const maxReconnectAttempts = 5
+  const [connected, setConnected] = useState(false)
 
   const connect = useCallback(() => {
     if (!token) return
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${protocol}//${host}/ws/interview/${sessionId}?token=${token}`
-
+    const wsUrl = `/ws/interview/${sessionId}?token=${token}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
       reconnectAttemptsRef.current = 0
+      setConnected(true)
       startPing()
     }
 
@@ -38,6 +37,7 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
     }
 
     ws.onclose = () => {
+      setConnected(false)
       if (reconnectAttemptsRef.current < maxReconnectAttempts) {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           reconnectAttemptsRef.current++
@@ -74,23 +74,23 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
   const send = useCallback((data: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data))
+      return true
     }
+    return false
   }, [])
 
   const sendAudioChunk = useCallback((chunk: ArrayBuffer, sampleRate: number) => {
     const base64 = btoa(String.fromCharCode(...new Uint8Array(chunk)))
-    send({ type: 'audio_chunk', data: base64, sample_rate: sampleRate })
+    return send({ type: 'audio_chunk', data: base64, sample_rate: sampleRate })
   }, [send])
 
   const sendAudioEnd = useCallback(() => {
-    send({ type: 'audio_end' })
+    return send({ type: 'audio_end' })
   }, [send])
 
   const sendInterrupt = useCallback((reason: string) => {
-    send({ type: 'interrupt', reason })
+    return send({ type: 'interrupt', reason })
   }, [send])
-
-  const connected = wsRef.current?.readyState === WebSocket.OPEN
 
   return { send, sendAudioChunk, sendAudioEnd, sendInterrupt, connected }
 }
