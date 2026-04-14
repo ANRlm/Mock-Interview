@@ -260,7 +260,7 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 │  /api/sessions/*  ← 会话管理                                             │
 │  /api/sessions/{id}/resume   ← 简历上传                                   │
 │  /api/sessions/{id}/report   ← 报告生成                                  │
-│  /api/behavior/*  ← 行为数据                                             │
+│  /api/sessions/{id}/behavior ← 行为数据                                  │
 │  /ws/interview/{id}?token=  ← 实时面试                                  │
 └────────┬───────────────┬──────────────────────┬─────────────────────────┘
          │               │                      │
@@ -292,7 +292,7 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 
 ### 添加新题库
 
-在 `knowledge_base/<profession>/` 目录下添加 Markdown 文件，系统会自动加载。
+在 `knowledge_base/<profession>/` 目录下添加 Markdown 文件，系统会自动加载。（注意：需在 `docker-compose.gpu.yml` 中挂载知识库目录）
 
 ## 许可证
 
