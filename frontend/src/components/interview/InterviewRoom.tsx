@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useInterviewStore, type Message } from '@/stores/interviewStore'
 import { ChatPanel } from './ChatPanel'
 import { AudioPanel } from './AudioPanel'
+import { AIVoiceAnimation } from './AIVoiceAnimation'
 import { StatusBar } from './StatusBar'
 import { PosePip } from './PosePip'
 import { Button } from '@/components/ui/Button'
@@ -230,43 +231,51 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
-        <AudioPanel level={0} active={isRecording || isManualRecording} />
-        <ChatPanel messages={messages} streamText={streamText} onReadAloud={inputMode === 'text' ? handleReadAloud : undefined} ttsPlayingFor={ttsPlayingFor} inputMode={inputMode} stage={stage} />
-        <StatusBar stage={stage} connected={connected} turnCount={turnCount} sttPreview={sttPreview} ttsQueueSize={ttsQueueSize} recording={isRecording} ttsProviderLabel={ttsProviderLabel} llmStats={llmStats} />
-      </div>
+{inputMode === 'voice' ? (
+        <div className="grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
+          <AudioPanel level={0} active={isRecording || isManualRecording} />
+          <div className="flex items-center justify-center rounded-xl border border-border bg-surface">
+            <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
+          </div>
+          <StatusBar stage={stage} connected={connected} turnCount={turnCount} sttPreview={sttPreview} ttsQueueSize={ttsQueueSize} recording={isRecording} ttsProviderLabel={ttsProviderLabel} llmStats={llmStats} />
+        </div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
+          <AudioPanel level={0} active={isRecording || isManualRecording} />
+          <ChatPanel messages={messages} streamText={streamText} onReadAloud={inputMode === 'text' ? handleReadAloud : undefined} ttsPlayingFor={ttsPlayingFor} inputMode={inputMode} stage={stage} />
+          <StatusBar stage={stage} connected={connected} turnCount={turnCount} sttPreview={sttPreview} ttsQueueSize={ttsQueueSize} recording={isRecording} ttsProviderLabel={ttsProviderLabel} llmStats={llmStats} />
+        </div>
+      )}
 
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <p className="text-xs text-text-muted">
-            {inputMode === 'voice'
-              ? '当前为语音模式，系统自动进行录音与静音检测。'
-              : '当前为文本模式，可手动输入回答。点击回复旁的"朗读"按钮可手动触发语音。点击下方麦克风图标可进行语音输入。'}
-          </p>
-          <div className="relative">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="输入你的回答..."
-              disabled={inputMode !== 'text'}
-              className="pr-20"
-            />
-            <div className="absolute bottom-2 right-2 flex gap-1">
-              {inputMode === 'text' && (
+      {inputMode === 'text' && (
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <p className="text-xs text-text-muted">
+              当前为文本模式，可手动输入回答。点击回复旁的"朗读"按钮可手动触发语音。点击下方麦克风图标可进行语音输入。
+            </p>
+            <div className="relative">
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="输入你的回答..."
+                disabled={inputMode !== 'text'}
+                className="pr-20"
+              />
+              <div className="absolute bottom-2 right-2 flex gap-1">
                 <Button variant={manualVoiceActive ? 'primary' : 'secondary'} size="sm" onClick={handleManualVoiceToggle} className="h-8 px-2">
                   <Mic size={14} />
                   <span className="ml-1 text-xs">语音</span>
                 </Button>
-              )}
+              </div>
             </div>
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={handleSendText} disabled={inputMode !== 'text' || !input.trim() || !connected}>
-              <Send size={14} className="mr-1" />发送
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex justify-end">
+              <Button onClick={handleSendText} disabled={!input.trim() || !connected}>
+                <Send size={14} className="mr-1" />发送
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
