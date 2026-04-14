@@ -1,12 +1,11 @@
 {
-  "active_plan": "/home/cnhyk/Interview/mock-interview/.sisyphus/plans/complete-redesign-v3.md",
-  "started_at": "2026-04-14T05:24:28.946Z",
-  "session_ids": [
-    "ses_2763519bfffeklaU2yYqyRZjIg"
-  ],
-  "session_origins": {
-    "ses_2763519bfffeklaU2yYqyRZjIg": "direct"
-  },
-  "plan_name": "complete-redesign-v3",
-  "agent": "atlas"
+  "active_plan": null,
+  "started_at": null,
+  "session_ids": [],
+  "session_origins": {},
+  "plan_name": null,
+  "agent": null,
+  "status": "COMPLETE",
+  "completed_at": "2026-04-14T08:50:00.000Z",
+  "summary": "complete-redesign-v3: 14/14 tasks done"
 }
