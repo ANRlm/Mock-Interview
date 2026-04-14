@@ -52,36 +52,43 @@ mock-interview/
 ├── frontend/                      # React 前端应用
 │   ├── src/
 │   │   ├── components/           # React 组件
+│   │   │   ├── ui/               # 基础 UI 组件
+│   │   │   ├── layout/           # 布局组件
+│   │   │   ├── interview/        # 面试房间组件
+│   │   │   ├── landing/          # 落地页组件
+│   │   │   └── setup/            # 设置页组件
+│   │   ├── pages/                # 页面组件
 │   │   ├── stores/               # Zustand 状态管理
 │   │   ├── hooks/                # 自定义 Hooks
-│   │   └── ...
+│   │   ├── services/             # API 服务
+│   │   └── lib/                  # 工具函数
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── tailwind.config.ts
 │
 ├── backend/                      # FastAPI 后端服务
 │   ├── app/
-│   │   ├── api/                  # API 路由
+│   │   ├── api/                  # API 路由（auth, interview, resume, report, behavior）
+│   │   ├── agents/               # AI Agent（interviewer, resume, verifier, scorer, monitor）
 │   │   ├── core/                 # 核心配置（安全、限流）
-│   │   ├── services/             # 业务服务（STT/TTS/LLM/RAG）
-│   │   ├── schemas/              # Pydantic 模型
-│   │   ├── ws/                    # WebSocket 处理
-│   │   ├── scripts/              # 工具脚本
+│   │   ├── models/               # SQLAlchemy 模型
+│   │   ├── services/             # 业务服务（STT/TTS/LLM/RAG/Vision）
+│   │   ├── ws/                   # WebSocket 处理
 │   │   ├── config.py             # 配置管理
-│   │   └── main.py               # 应用入口
+│   │   ├── schemas.py            # Pydantic 模型
+│   │   ├── main.py               # 应用入口
+│   │   └── database.py          # 数据库连接
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── .env.example
 │
-├── knowledge_base/               # RAG 知识库
-│   ├── programmer/               # 程序员题库
-│   ├── teacher/                  # 教师题库
-│   ├── doctor/                   # 医生题库
-│   └── lawyer/                   # 律师题库
-│
+├── docker/                       # Docker 配置文件
+├── scripts/                       # 辅助脚本
+├── docker-compose.yml            # 默认配置
 ├── docker-compose.gpu.yml        # GPU 部署配置（推荐）
-├── docker-compose.dev.yml       # CPU 开发模式
-└── CONTRIBUTING.md               # 贡献指南
+├── docker-compose.dev.yml        # CPU 开发模式
+├── CONTRIBUTING.md               # 贡献指南
+└── LICENSE                      # MIT 许可证
 ```
 
 ## 环境要求
@@ -253,19 +260,19 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 │  /api/sessions/*  ← 会话管理                                             │
 │  /api/sessions/{id}/resume   ← 简历上传                                   │
 │  /api/sessions/{id}/report   ← 报告生成                                  │
-│  /api/sessions/{id}/behavior ← 行为数据                                  │
+│  /api/behavior/*  ← 行为数据                                             │
 │  /ws/interview/{id}?token=  ← 实时面试                                  │
 └────────┬───────────────┬──────────────────────┬─────────────────────────┘
          │               │                      │
     ┌────▼────┐    ┌─────▼─────┐    ┌────────▼────────┐
-    │ SQLite/ │    │  Ollama   │    │     FunASR      │
-    │PostgreSQL│   │ qwen3.5:2b│    │      (STT)       │
-    │ sessions│    │    GPU    │    └────────┬────────┘
-    │ messages│    └───────────┘             │
+    │ SQLite/ │    │  Ollama   │    │  FunASR /      │
+    │PostgreSQL│   │ qwen3.5:2b│    │  SenseVoice    │
+    │ sessions│    │    GPU    │    │      (STT)      │
+    │ messages│    └───────────┘    └────────┬────────┘
     │ reports │                        ┌─────▼────────┐
     └─────────┘                          │  CosyVoice2  │
-                                         │    (TTS)     │
-                                         └──────────────┘
+                                         │    (TTS)    │
+                                         └─────────────┘
 ```
 
 ## 开发指南
