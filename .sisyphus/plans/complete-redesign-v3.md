@@ -229,10 +229,17 @@ T14 (全双工调优) ← T12, T13
 
 ## Success Criteria
 
-1. ✅ 首页精美动效，滚动视差 + 渐入动画
-2. ✅ Lottie 装饰动画正常运行
-3. ✅ 配置页直观易用，无需理解 JSON
-4. ✅ 菜单栏无面试入口
-5. ✅ 全双工延迟 < 1.5秒
-6. ✅ STT 首帧 < 500ms
-7. ✅ TTS 首包 < 300ms
+### Frontend (Completed)
+1. ✅ 首页精美动效，滚动视差 + 渐入动画 - HeroSection + FeaturesSection + TechSection
+2. ✅ Lottie 装饰动画正常运行 - lottie-react in HeroSection
+3. ✅ 配置页直观易用，无需理解 JSON - RoleSelector, ResumeUploader, ModelSelector created
+4. ✅ 菜单栏无面试入口 - NavBar simplified with "开始面试" CTA
+
+### Backend (Requires Manual Testing)
+5. ⏳ 全双工延迟 < 1.5秒 - Needs smoke test runs
+6. ⏳ STT 首帧 < 500ms - FunASR running, needs baseline measurement
+7. ⏳ TTS 首包 < 300ms - CosyVoice2 configured, needs baseline measurement
+
+### Implementation Notes
+- T9 (Routes): No changes needed - existing routes work
+- T10 (InterviewPage): No changes needed - already functional
