@@ -1,68 +1,101 @@
-# AI Mock Interview - AI 模拟面试系统
+# AI Mock Interview
 
 本地可运行的 AI 模拟面试系统，支持实时语音面试（STT → LLM → TTS）、简历解析、面试报告生成。针对 WSL2 + NVIDIA GPU 场景做了深度优化。
 
 ## 核心功能
 
-- **实时语音面试** - WebSocket 双向通信，支持文本与音频实时交互
-- **语音识别 (STT)** - FunASR 2-pass 模型，高精度中文语音转文本
-- **智能问答 (LLM)** - Ollama qwen3.5:2b，本地 GPU 加速推理
-- **语音合成 (TTS)** - CosyVoice2，流式音频输出，已适配 RTX 50 系列
-- **简历解析** - PDF/图片上传，结构化提取关键信息
-- **面试报告** - 多维度评估（内容质量、流畅度、行为分析）
-- **行为分析** - 实时检测视线接触、表情情绪、头部姿态
-- **JWT 认证** - 全链路 API 保护，支持注册/登录
+| 功能 | 说明 |
+|------|------|
+| 实时语音面试 | WebSocket 双向通信，支持文本与音频实时交互 |
+| 语音识别 (STT) | FunASR 2-pass 模型，高精度中文语音转文本 |
+| 智能问答 (LLM) | Ollama qwen3.5:2b，本地 GPU 加速推理 |
+| 语音合成 (TTS) | CosyVoice2，流式音频输出，已适配 RTX 50 系列 |
+| 简历解析 | PDF/图片上传，结构化提取关键信息 |
+| 面试报告 | 多维度评估（内容质量、流畅度、行为分析） |
+| 行为分析 | 实时检测视线接触、表情情绪、头部姿态 |
+| JWT 认证 | 全链路 API 保护，支持注册/登录 |
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 前端 | React 18 + Vite + TypeScript + Zustand + TailwindCSS |
-| 后端 | FastAPI + SQLAlchemy (async) + PostgreSQL |
-| LLM | Ollama (qwen3.5:2b) |
-| STT | FunASR (Paraformer-large) |
-| TTS | CosyVoice2 |
-| 向量库 | ChromaDB |
-| 部署 | Docker Compose |
+### 前端
+
+- React 18 + Vite + TypeScript
+- Zustand（状态管理）
+- TailwindCSS
+- Radix UI + Lucide Icons
+- Framer Motion（动画）
+- Lottie（动画效果）
+
+### 后端
+
+- FastAPI + Uvicorn
+- SQLAlchemy (async)
+- PostgreSQL / SQLite
+- ChromaDB（向量数据库）
+
+### AI/ML
+
+- LLM: Ollama (qwen3.5:2b)
+- STT: FunASR (Paraformer-large) / SenseVoice
+- TTS: CosyVoice2
+- Embedding: BAAI/bge-m3
+
+### 部署
+
+- Docker Compose
+- NVIDIA CUDA (GPU 加速)
 
 ## 项目结构
 
 ```
 mock-interview/
-├── frontend/                 # React 前端应用
+├── frontend/                      # React 前端应用
 │   ├── src/
-│   │   ├── components/      # React 组件
-│   │   ├── stores/          # Zustand 状态管理
-│   │   ├── hooks/           # 自定义 Hooks
+│   │   ├── components/           # React 组件
+│   │   ├── stores/               # Zustand 状态管理
+│   │   ├── hooks/                # 自定义 Hooks
 │   │   └── ...
 │   ├── package.json
-│   └── vite.config.ts
-├── backend/                  # FastAPI 后端服务
+│   ├── vite.config.ts
+│   └── tailwind.config.ts
+│
+├── backend/                      # FastAPI 后端服务
 │   ├── app/
-│   │   ├── api/            # API 路由
-│   │   ├── core/           # 核心配置（安全、限流）
-│   │   ├── services/       # 业务服务（STT/TTS/LLM/RAG）
-│   │   ├── schemas/        # Pydantic 模型
-│   │   ├── scripts/        # 工具脚本
-│   │   └── main.py         # 应用入口
+│   │   ├── api/                  # API 路由
+│   │   ├── core/                 # 核心配置（安全、限流）
+│   │   ├── services/             # 业务服务（STT/TTS/LLM/RAG）
+│   │   ├── schemas/              # Pydantic 模型
+│   │   ├── ws/                    # WebSocket 处理
+│   │   ├── scripts/              # 工具脚本
+│   │   ├── config.py             # 配置管理
+│   │   └── main.py               # 应用入口
 │   ├── requirements.txt
-│   └── Dockerfile
-├── docker-compose.gpu.yml    # GPU 部署配置（推荐）
-├── docker-compose.dev.yml    # CPU 开发模式
-├── knowledge_base/           # RAG 知识库
-│   ├── programmer/          # 程序员题库
-│   ├── teacher/             # 教师题库
-│   ├── doctor/              # 医生题库
-│   └── lawyer/              # 律师题库
-└── scripts/                  # 辅助脚本
+│   ├── Dockerfile
+│   └── .env.example
+│
+├── knowledge_base/               # RAG 知识库
+│   ├── programmer/               # 程序员题库
+│   ├── teacher/                  # 教师题库
+│   ├── doctor/                   # 医生题库
+│   └── lawyer/                   # 律师题库
+│
+├── docker-compose.gpu.yml        # GPU 部署配置（推荐）
+├── docker-compose.dev.yml       # CPU 开发模式
+└── CONTRIBUTING.md               # 贡献指南
 ```
 
 ## 环境要求
 
+### 基础环境
+
 - **操作系统**: Windows + WSL2 (Ubuntu) 或 Linux
 - **运行时**: Docker + Docker Compose
-- **GPU**: NVIDIA 显卡 + WSL 内 NVIDIA Container Toolkit
 - **内存**: 推荐 16GB+
+
+### GPU 环境（推荐）
+
+- NVIDIA 显卡 + WSL 内 NVIDIA Container Toolkit
+- CUDA 12.6+
 
 ### GPU 环境验证
 
@@ -76,27 +109,21 @@ docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
 
 ## 快速开始
 
-### 1. 克隆项目
-
-```bash
-cd /home/cnhyk/Interview/mock-interview
-```
-
-### 2. 配置环境变量
+### 1. 配置环境变量
 
 ```bash
 cp backend/.env.example backend/.env
 # 编辑 backend/.env，设置 JWT_SECRET 等敏感配置
 ```
 
-### 3. 启动服务（GPU 推荐）
+### 2. 启动服务（GPU 推荐）
 
 ```bash
 docker compose -f docker-compose.gpu.yml up -d
 docker compose -f docker-compose.gpu.yml ps
 ```
 
-### 4. 访问应用
+### 3. 访问应用
 
 | 服务 | 地址 |
 |------|------|
@@ -124,7 +151,8 @@ curl -X POST http://127.0.0.1:8000/api/auth/login \
   -d '{"username":"yourname","password":"yourpassword"}'
 ```
 
-响应示例：
+**响应示例:**
+
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
@@ -153,12 +181,15 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
   --artifact-dir /tmp/phase123_run2
 ```
 
-验证指标：
-- `resume_status=uploaded` - 简历上传成功
-- `llm_done=true` - LLM 推理完成
-- `tts_chunks > 0` - TTS 音频生成成功
-- `stt_final` 非空 - 语音识别有结果
-- `report_total_score` 存在 - 报告生成成功
+**验证指标:**
+
+| 指标 | 说明 |
+|------|------|
+| `resume_status=uploaded` | 简历上传成功 |
+| `llm_done=true` | LLM 推理完成 |
+| `tts_chunks > 0` | TTS 音频生成成功 |
+| `stt_final` 非空 | 语音识别有结果 |
+| `report_total_score` 存在 | 报告生成成功 |
 
 ## 行为分析
 
@@ -179,21 +210,23 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `JWT_SECRET` | JWT 签名密钥（生产环境必设） | - |
-| `DATABASE_URL` | PostgreSQL 连接字符串 | postgresql+asyncpg://... |
-| `LLM_BASE_URL` | Ollama API 地址 | http://ollama:11434 |
+| `DATABASE_URL` | 数据库连接字符串 | sqlite+aiosqlite:///./mock_interview.db |
+| `LLM_BASE_URL` | Ollama API 地址 | http://localhost:11434/v1 |
 | `LLM_MODEL` | LLM 模型名称 | qwen3.5:2b |
 | `LLM_DISABLE_THINKING` | 禁用思考过程 | true |
-| `FUNASR_BASE_URL` | FunASR API 地址 | http://funasr:10095 |
-| `COSYVOICE_BASE_URL` | CosyVoice API 地址 | http://cosyvoice2:50000 |
+| `FUNASR_BASE_URL` | FunASR API 地址 | http://127.0.0.1:10095 |
+| `COSYVOICE_BASE_URL` | CosyVoice API 地址 | http://127.0.0.1:50000 |
 | `COSYVOICE_MODE` | TTS 模式 | sft |
 | `COSYVOICE_SPEED` | 语速 | 1.6 |
 
 ### TTS 性能调优
 
-- `COSYVOICE_MODE=sft` - 推荐，稳定可靠
-- `COSYVOICE_SPEED=1.6` - 质量优先
-- `TTS_SENTENCE_MAX_CHARS=120` - 长句自动切分
-- `TTS_FIRST_CHUNK_TIMEOUT_SECONDS=6.5` - 首包超时守卫
+| 参数 | 推荐值 | 说明 |
+|------|--------|------|
+| `COSYVOICE_MODE` | sft | 推荐，稳定可靠 |
+| `COSYVOICE_SPEED` | 1.6 | 质量优先 |
+| `TTS_SENTENCE_MAX_CHARS` | 120 | 长句自动切分 |
+| `TTS_FIRST_CHUNK_TIMEOUT_SECONDS` | 6.5 | 首包超时守卫 |
 
 ### HTTPS 开发环境
 
@@ -209,30 +242,30 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 ## 系统架构
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        前端 (React + Vite)                         │
-│            AuthStore │ InterviewStore │ useWebSocket              │
-└───────────────────────────────┬────────────────────────────────────┘
-                                │ HTTP + WebSocket
-┌───────────────────────────────▼────────────────────────────────────┐
-│                      后端 (FastAPI + Uvicorn)                       │
-│  /api/auth/*      ← JWT 认证                                        │
-│  /api/sessions/*  ← 会话管理                                        │
-│  /api/sessions/{id}/resume   ← 简历上传                              │
-│  /api/sessions/{id}/report   ← 报告生成                              │
-│  /api/sessions/{id}/behavior ← 行为数据                              │
-│  /ws/interview/{id}?token=  ← 实时面试                              │
-└───────┬───────────────┬───────────────────┬────────────────────────┘
-        │               │                   │
-   ┌────▼────┐    ┌──────▼──────┐    ┌───────▼───────┐
-   │PostgreSQL│   │   Ollama    │   │    FunASR     │
-   │ sessions │   │ qwen3.5:2b  │   │   (STT)       │
-   │ messages │   │    GPU      │   └───────┬───────┘
-   │ reports  │   └─────────────┘           │
-   └──────────┘                     ┌───────▼───────┐
-                                    │  CosyVoice2   │
-                                    │    (TTS)      │
-                                    └───────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          前端 (React + Vite)                            │
+│                 AuthStore │ InterviewStore │ useWebSocket              │
+└──────────────────────────────────┬──────────────────────────────────────┘
+                                   │ HTTP + WebSocket
+┌──────────────────────────────────▼──────────────────────────────────────┐
+│                        后端 (FastAPI + Uvicorn)                          │
+│  /api/auth/*      ← JWT 认证                                             │
+│  /api/sessions/*  ← 会话管理                                             │
+│  /api/sessions/{id}/resume   ← 简历上传                                   │
+│  /api/sessions/{id}/report   ← 报告生成                                  │
+│  /api/sessions/{id}/behavior ← 行为数据                                  │
+│  /ws/interview/{id}?token=  ← 实时面试                                  │
+└────────┬───────────────┬──────────────────────┬─────────────────────────┘
+         │               │                      │
+    ┌────▼────┐    ┌─────▼─────┐    ┌────────▼────────┐
+    │ SQLite/ │    │  Ollama   │    │     FunASR      │
+    │PostgreSQL│   │ qwen3.5:2b│    │      (STT)       │
+    │ sessions│    │    GPU    │    └────────┬────────┘
+    │ messages│    └───────────┘             │
+    │ reports │                        ┌─────▼────────┐
+    └─────────┘                          │  CosyVoice2  │
+                                         │    (TTS)     │
+                                         └──────────────┘
 ```
 
 ## 开发指南
@@ -256,4 +289,4 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 
 ## 许可证
 
-MIT License -详见 `LICENSE` 文件
+MIT License - 详见 `LICENSE` 文件
