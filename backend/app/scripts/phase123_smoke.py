@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import asyncio
 import base64
 import json
@@ -87,12 +88,26 @@ def _save_wav(path: Path, b64_wav: str) -> None:
     path.write_bytes(raw)
 
 
-def _new_client(*, timeout: httpx.Timeout | float) -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=timeout, trust_env=False)
+def _new_client(*, timeout: httpx.Timeout | float, token: str | None = None) -> httpx.AsyncClient:
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return httpx.AsyncClient(timeout=timeout, trust_env=False, headers=headers)
 
 
-async def _create_session(api_base: str) -> dict[str, Any]:
+async def _login(api_base: str, username: str, password: str) -> str:
     async with _new_client(timeout=20.0) as client:
+        response = await client.post(
+            f"{api_base}/auth/login",
+            json={"username": username, "password": password},
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["access_token"]
+
+
+async def _create_session(api_base: str, token: str) -> dict[str, Any]:
+    async with _new_client(timeout=20.0, token=token) as client:
         response = await client.post(
             f"{api_base}/sessions",
             json={"job_role": "programmer", "sub_role": "frontend engineer"},
@@ -101,7 +116,7 @@ async def _create_session(api_base: str) -> dict[str, Any]:
         return response.json()
 
 
-async def _upload_resume(api_base: str, session_id: str) -> dict[str, Any]:
+async def _upload_resume(api_base: str, session_id: str, token: str) -> dict[str, Any]:
     resume_text = """张三\n教育经历：某大学 计算机科学本科\n工作经历：负责前端架构与性能优化\n项目经历：主导企业级低代码平台\n技能：React TypeScript Node.js\n"""
     files = {
         "file": (
@@ -110,7 +125,7 @@ async def _upload_resume(api_base: str, session_id: str) -> dict[str, Any]:
             "text/plain",
         )
     }
-    async with _new_client(timeout=httpx.Timeout(240.0, connect=20.0)) as client:
+    async with _new_client(timeout=httpx.Timeout(240.0, connect=20.0), token=token) as client:
         response = await client.post(
             f"{api_base}/sessions/{session_id}/resume",
             files=files,
@@ -122,10 +137,11 @@ async def _upload_resume(api_base: str, session_id: str) -> dict[str, Any]:
 async def _run_ws_round(
     ws_base: str,
     session_id: str,
+    token: str,
     *,
     recv_timeout_seconds: float = 120.0,
 ) -> dict[str, Any]:
-    ws_url = f"{ws_base}/interview/{session_id}"
+    ws_url = f"{ws_base}/interview/{session_id}?token={token}"
     llm_tokens: list[str] = []
     current_response_id = ""
     tts_first_audio_seconds: float | None = None
@@ -277,8 +293,8 @@ async def _run_ws_round(
     }
 
 
-async def _generate_report(api_base: str, session_id: str) -> dict[str, Any]:
-    async with _new_client(timeout=30.0) as client:
+async def _generate_report(api_base: str, session_id: str, token: str) -> dict[str, Any]:
+    async with _new_client(timeout=30.0, token=token) as client:
         trigger = await client.post(f"{api_base}/sessions/{session_id}/report")
         trigger.raise_for_status()
 
@@ -295,8 +311,8 @@ async def _generate_report(api_base: str, session_id: str) -> dict[str, Any]:
     raise RuntimeError("report_timeout")
 
 
-async def _fetch_tts_metrics(api_base: str) -> dict[str, Any]:
-    async with _new_client(timeout=20.0) as client:
+async def _fetch_tts_metrics(api_base: str, token: str) -> dict[str, Any]:
+    async with _new_client(timeout=20.0, token=token) as client:
         response = await client.get(f"{api_base}/tts/metrics")
         response.raise_for_status()
         payload = response.json()
@@ -316,8 +332,8 @@ async def _fetch_tts_metrics(api_base: str) -> dict[str, Any]:
     return {k: payload.get(k) for k in keep_keys if k in payload}
 
 
-async def _reset_tts_metrics(api_base: str) -> None:
-    async with _new_client(timeout=20.0) as client:
+async def _reset_tts_metrics(api_base: str, token: str) -> None:
+    async with _new_client(timeout=20.0, token=token) as client:
         response = await client.delete(f"{api_base}/tts/metrics")
         response.raise_for_status()
 
@@ -340,6 +356,9 @@ async def main() -> None:
         default=float(os.getenv("SMOKE_WS_RECV_TIMEOUT_SECONDS", "120")),
     )
     parser.add_argument("--reset-tts-metrics", action="store_true")
+    parser.add_argument("--username", default=os.getenv("SMOKE_USERNAME", "smoketest"))
+    parser.add_argument("--password", default=os.getenv("SMOKE_PASSWORD", "smoketest123"))
+    parser.add_argument("--register", action="store_true", help="Register the test user if not exists")
     args = parser.parse_args()
 
     _disable_local_proxy_env()
@@ -357,23 +376,47 @@ async def main() -> None:
         backend_health = await client.get(f"{http_health_base}/healthz")
         backend_health.raise_for_status()
 
+    if args.register:
+        async with _new_client(timeout=20.0) as client:
+            try:
+                reg_resp = await client.post(
+                    f"{api_base}/auth/register",
+                    json={
+                        "username": args.username,
+                        "email": f"{args.username}@test.local",
+                        "password": args.password,
+                    },
+                )
+                if reg_resp.status_code == 201:
+                    print(f"Registered new user: {args.username}", file=sys.stderr)
+                elif reg_resp.status_code == 409:
+                    print(f"User already exists: {args.username}", file=sys.stderr)
+                else:
+                    reg_resp.raise_for_status()
+            except Exception as exc:
+                print(f"Registration warning: {exc}", file=sys.stderr)
+
+    token = await _login(api_base, args.username, args.password)
+    print(f"Authenticated as: {args.username}", file=sys.stderr)
+
     if args.reset_tts_metrics:
-        await _reset_tts_metrics(api_base)
+        await _reset_tts_metrics(api_base, token)
 
     outputs: list[dict[str, Any]] = []
     failed_runs: list[dict[str, str]] = []
     for _ in range(max(1, args.runs)):
-        session = await _create_session(api_base)
+        session = await _create_session(api_base, token)
         session_id = str(session["id"])
 
         try:
-            resume = await _upload_resume(api_base, session_id)
+            resume = await _upload_resume(api_base, session_id, token)
             ws_result = await _run_ws_round(
                 ws_base,
                 session_id,
+                token,
                 recv_timeout_seconds=max(30.0, float(args.ws_recv_timeout)),
             )
-            report = await _generate_report(api_base, session_id)
+            report = await _generate_report(api_base, session_id, token)
         except Exception as exc:
             failed_runs.append({"session_id": session_id, "error": str(exc)})
             continue
@@ -473,7 +516,7 @@ async def main() -> None:
         }
 
     try:
-        summary["tts_metrics"] = await _fetch_tts_metrics(api_base)
+        summary["tts_metrics"] = await _fetch_tts_metrics(api_base, token)
     except Exception as exc:
         summary["tts_metrics_error"] = str(exc)
 
