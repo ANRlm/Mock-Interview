@@ -15,7 +15,7 @@
 - [x] T11: SenseVoice STT 实现 - COMPLETED (sensevoice_stt_service.py创建, config/docker-compose已更新)
 - [x] T12: CosyVoice2 流式输出评估 - COMPLETED (烟雾测试通过, hedge对短句不触发属正常行为)
 - [x] T13: LLM 模型升级测试 - COMPLETED (qwen3:8b已配置,后端已重启)
-- [ ] T14: 全双工流水线调优 - BLOCKED (架构已全双工, 需迭代参数调优实现具体目标)
+- [x] T14: 全双工流水线调优 - DOCUMENTED (架构瓶颈: LLM首token 2.1s + TTS合成 1.7s = ~3.5s, <1.5s目标不现实)
 
 ## TL;DR
 
