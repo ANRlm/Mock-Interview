@@ -90,3 +90,30 @@ T11-T14 require:
 4. Quantitative latency measurements
 
 **Recommendation**: These are better done manually with proper hardware and time allocation.
+
+## Manual Steps for T11-T14
+
+### T13: Upgrade LLM to qwen3:8b
+```bash
+# 1. Pull model (8GB+, takes time)
+docker exec -it mock-interview-ollama-1 ollama pull qwen3:8b
+
+# 2. Update docker-compose.gpu.yml
+# Change LLM_MODEL: qwen3.5:2b → LLM_MODEL: qwen3:8b
+# Also update model= in ollama_init section
+
+# 3. Restart ollama and backend
+docker-compose -f docker-compose.gpu.yml restart ollama backend
+```
+
+### T11: SenseVoice Evaluation
+```bash
+# Research SenseVoice Docker image
+# Update docker-compose.gpu.yml funasr service
+# Restart and compare latency metrics
+```
+
+### T12/T14: Smoke Testing
+```bash
+docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke --runs 3 --reset-tts-metrics
+```
