@@ -62,11 +62,11 @@ const progressItems = [
 
 export function MetricsSection() {
   return (
-    <section className="py-24 bg-bg relative overflow-hidden">
+    <section className="w-full py-24 bg-surface relative overflow-hidden">
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
       <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-primary/3 rounded-full blur-3xl" />
-      
-      <div className="w-full px-4 relative z-10">
+
+      <div className="max-w-5xl mx-auto px-6 relative z-10">
         <FadeUp className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4">性能指标</h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
@@ -82,7 +82,7 @@ export function MetricsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.1, duration: 0.5 }}
-              className="p-6 rounded-2xl bg-surface border border-border hover:shadow-geist-lg transition-shadow"
+              className="p-6 rounded-2xl bg-bg border border-border hover:shadow-geist-lg transition-shadow"
             >
               <div className={`w-12 h-12 rounded-xl ${metric.bgColor} ${metric.color} flex items-center justify-center mb-4`}>
                 {metric.icon}
@@ -101,7 +101,7 @@ export function MetricsSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.4, duration: 0.5 }}
-          className="max-w-2xl mx-auto p-6 rounded-2xl bg-surface border border-border"
+          className="max-w-2xl mx-auto p-6 rounded-2xl bg-bg border border-border"
         >
           <h3 className="text-lg font-semibold mb-6 text-center">系统效率</h3>
           <div className="space-y-4">
@@ -111,7 +111,7 @@ export function MetricsSection() {
                   <span className="text-sm text-text-secondary">{item.label}</span>
                   <span className="text-sm font-medium text-text">{item.value}%</span>
                 </div>
-                <div className="h-2 bg-bg rounded-full overflow-hidden">
+                <div className="h-2 bg-surface rounded-full overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     whileInView={{ width: `${item.value}%` }}

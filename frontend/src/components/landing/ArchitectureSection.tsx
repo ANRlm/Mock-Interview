@@ -70,10 +70,10 @@ function PipelineBox({ step, index }: { step: typeof pipelineSteps[0]; index: nu
 
 export function ArchitectureSection() {
   return (
-    <section className="py-24 bg-surface relative overflow-hidden">
+    <section className="w-full py-24 bg-surface relative overflow-hidden">
       <div className="absolute inset-0 bg-grid-pattern opacity-5" />
-      
-      <div className="w-full px-4">
+
+      <div className="max-w-5xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4">技术架构</h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
@@ -81,7 +81,7 @@ export function ArchitectureSection() {
           </p>
         </FadeUp>
 
-        <div className="relative max-w-5xl mx-auto">
+        <div className="relative">
           <div className="hidden lg:flex items-center justify-between gap-2">
             {pipelineSteps.map((step, index) => (
               <div key={index} className="flex items-center">

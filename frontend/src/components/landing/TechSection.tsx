@@ -76,7 +76,7 @@ function TechCategory({
           <span className="text-3xl">{icon}</span>
           <span className={`bg-gradient-to-r ${color} bg-clip-text text-transparent`}>{title}</span>
         </h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {techs.map((tech, index) => (
             <TechCard key={tech.name} tech={tech} index={index} />
           ))}
@@ -88,8 +88,8 @@ function TechCategory({
 
 export function TechSection() {
   return (
-    <section className="py-24 bg-bg">
-      <div className="w-full px-4">
+    <section className="w-full py-24 bg-bg">
+      <div className="max-w-6xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4">技术栈</h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">

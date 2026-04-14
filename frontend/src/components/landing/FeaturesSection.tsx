@@ -61,8 +61,8 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="py-24 bg-surface">
-      <div className="max-w-6xl mx-auto px-4">
+    <section id="features" className="w-full py-24 bg-surface">
+      <div className="max-w-6xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4">为什么选择我们</h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">

@@ -56,7 +56,7 @@ function HeroAnimationInner() {
 }
 
 function LottieAnimation({ animationData }: { animationData: object }) {
-  return <Lottie loop autoplay animationData={animationData} rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }} />
+  return <Lottie loop autoplay animationData={animationData} />
 }
 
 function HeroAnimationWithError() {
@@ -75,11 +75,7 @@ const stats = [
 
 export function HeroSection() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900" />
-      
-      <div className="absolute inset-0 bg-grid-pattern opacity-10" />
-      
+    <section className="w-full min-h-screen bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900 relative overflow-hidden">
       <motion.div
         className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[100px]"
         animate={{
@@ -117,90 +113,91 @@ export function HeroSection() {
         }}
       />
 
-      <div className="relative z-10 w-full px-4 py-20 grid lg:grid-cols-2 gap-12 items-center">
-        <div className="text-center lg:text-left">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <span className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
-              AI 驱动的面试练习平台
-            </span>
-          </motion.div>
-
-          <motion.h1
-            className="text-6xl lg:text-8xl font-bold tracking-tight mb-6"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          >
-            <span className="text-text">模拟真实面试</span>
-            <br />
-            <span className="text-primary">提升你的表现</span>
-          </motion.h1>
-
-          <motion.p
-            className="text-xl text-text-secondary max-w-xl mb-8"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            与 AI 面试官进行实时对话，获得即时反馈和专业建议。
-            支持多种职位模拟，帮助你准备下一次重要面试。
-          </motion.p>
-
-          <motion.div
-            className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <motion.a
-              href="/setup"
-              className="inline-flex items-center justify-center px-10 py-4 rounded-xl bg-primary text-white text-lg font-medium hover:bg-primary-hover transition-colors"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
+      <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="text-center lg:text-left">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
             >
-              开始面试
-              <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </motion.a>
+              <span className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
+                AI 驱动的面试练习平台
+              </span>
+            </motion.div>
 
-            <motion.a
-              href="#features"
-              className="inline-flex items-center justify-center px-10 py-4 rounded-xl border-2 border-border text-text text-lg font-medium hover:bg-surface transition-colors"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
+            <motion.h1
+              className="text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-tight"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
             >
-              了解更多
-            </motion.a>
-          </motion.div>
+              <span className="text-text">模拟真实面试</span>
+              <br />
+              <span className="text-primary">提升你的表现</span>
+            </motion.h1>
+
+            <motion.p
+              className="text-lg text-text-secondary mb-8 max-w-lg"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              与先进的 AI 面试官进行实时对话练习，获得即时反馈和专业建议。
+            </motion.p>
+
+            <motion.div
+              className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <motion.a
+                href="/setup"
+                className="inline-flex items-center justify-center px-10 py-4 rounded-xl bg-primary text-white text-lg font-medium hover:bg-primary-hover transition-colors"
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                开始面试
+                <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </motion.a>
+
+              <motion.a
+                href="#features"
+                className="inline-flex items-center justify-center px-10 py-4 rounded-xl border-2 border-border text-text text-lg font-medium hover:bg-surface transition-colors"
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                了解更多
+              </motion.a>
+            </motion.div>
+
+            <motion.div
+              className="mt-12 grid grid-cols-3 gap-6"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              {stats.map((stat, index) => (
+                <div key={index} className="text-center lg:text-left">
+                  <div className="text-2xl lg:text-3xl font-bold text-primary">{stat.value}</div>
+                  <div className="text-sm text-text-muted">{stat.label}</div>
+                </div>
+              ))}
+            </motion.div>
+          </div>
 
           <motion.div
-            className="mt-12 grid grid-cols-3 gap-6"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
+            className="flex justify-center"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
           >
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center lg:text-left">
-                <div className="text-2xl lg:text-3xl font-bold text-primary">{stat.value}</div>
-                <div className="text-sm text-text-muted">{stat.label}</div>
-              </div>
-            ))}
+            <HeroAnimationWithError />
           </motion.div>
         </div>
-
-        <motion.div
-          className="flex justify-center lg:justify-end"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-        >
-          <HeroAnimationWithError />
-        </motion.div>
       </div>
 
       <motion.div
