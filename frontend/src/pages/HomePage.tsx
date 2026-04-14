@@ -5,8 +5,11 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { api } from '@/services/api'
 import { HeroSection } from '@/components/landing/HeroSection'
+import { HowItWorksSection } from '@/components/landing/HowItWorksSection'
 import { FeaturesSection } from '@/components/landing/FeaturesSection'
 import { TechSection } from '@/components/landing/TechSection'
+import { ArchitectureSection } from '@/components/landing/ArchitectureSection'
+import { MetricsSection } from '@/components/landing/MetricsSection'
 
 const roles = [
   { id: 'programmer', label: '程序员', icon: Code, desc: '前端/后端/全栈开发' },
@@ -34,8 +37,11 @@ export function HomePage() {
   return (
     <div className="space-y-12">
       <HeroSection />
+      <HowItWorksSection />
       <FeaturesSection />
       <TechSection />
+      <ArchitectureSection />
+      <MetricsSection />
 
       {sessions.length > 0 && (
         <div className="space-y-4">

@@ -67,15 +67,57 @@ function HeroAnimationWithError() {
   )
 }
 
+const stats = [
+  { value: '4+', label: '职位类型' },
+  { value: '100%', label: '隐私保护' },
+  { value: '实时', label: '反馈分析' },
+]
+
 export function HeroSection() {
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900" />
       
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-primary/3 rounded-full blur-3xl" />
+      <div className="absolute inset-0 bg-grid-pattern opacity-10" />
+      
+      <motion.div
+        className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[100px]"
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.3, 0.5, 0.3],
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+      />
+      <motion.div
+        className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[80px]"
+        animate={{
+          scale: [1.2, 1, 1.2],
+          opacity: [0.3, 0.5, 0.3],
+        }}
+        transition={{
+          duration: 6,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+      />
+      <motion.div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px]"
+        animate={{
+          scale: [1, 1.1, 1],
+          opacity: [0.2, 0.4, 0.2],
+        }}
+        transition={{
+          duration: 10,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+      />
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 py-20 grid lg:grid-cols-2 gap-12 items-center">
+      <div className="relative z-10 w-full px-4 py-20 grid lg:grid-cols-2 gap-12 items-center">
         <div className="text-center lg:text-left">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -88,7 +130,7 @@ export function HeroSection() {
           </motion.div>
 
           <motion.h1
-            className="text-5xl lg:text-7xl font-bold tracking-tight mb-6"
+            className="text-6xl lg:text-8xl font-bold tracking-tight mb-6"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
@@ -99,7 +141,7 @@ export function HeroSection() {
           </motion.h1>
 
           <motion.p
-            className="text-lg text-text-secondary max-w-xl mb-8"
+            className="text-xl text-text-secondary max-w-xl mb-8"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
@@ -116,7 +158,7 @@ export function HeroSection() {
           >
             <motion.a
               href="/setup"
-              className="inline-flex items-center justify-center px-8 py-3.5 rounded-lg bg-primary text-white font-medium hover:bg-primary-hover transition-colors"
+              className="inline-flex items-center justify-center px-10 py-4 rounded-xl bg-primary text-white text-lg font-medium hover:bg-primary-hover transition-colors"
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -128,12 +170,26 @@ export function HeroSection() {
 
             <motion.a
               href="#features"
-              className="inline-flex items-center justify-center px-8 py-3.5 rounded-lg border border-border text-text font-medium hover:bg-surface transition-colors"
+              className="inline-flex items-center justify-center px-10 py-4 rounded-xl border-2 border-border text-text text-lg font-medium hover:bg-surface transition-colors"
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
               了解更多
             </motion.a>
+          </motion.div>
+
+          <motion.div
+            className="mt-12 grid grid-cols-3 gap-6"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            {stats.map((stat, index) => (
+              <div key={index} className="text-center lg:text-left">
+                <div className="text-2xl lg:text-3xl font-bold text-primary">{stat.value}</div>
+                <div className="text-sm text-text-muted">{stat.label}</div>
+              </div>
+            ))}
           </motion.div>
         </div>
 
