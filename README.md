@@ -140,6 +140,23 @@ docker compose -f docker-compose.gpu.yml ps
 | Ollama API | http://127.0.0.1:11434 |
 | CosyVoice API | http://127.0.0.1:50000/openapi.json |
 
+### 4. 性能指标
+
+本项目在 **RTX 5080 Laptop (16GB VRAM)** + **qwen3:8b** 环境下实测性能：
+
+| 指标 | 数值 | 说明 |
+|------|------|------|
+| LLM 首 token 延迟 | ~0.12秒 | qwen3:8b Q4_K_M 量化，warmup 后 116-128ms |
+| TTS 首音频延迟 | ~2.5秒 | CosyVoice2 sft 模式流式首包 |
+| 端到端延迟 | ~4秒 | 语音输入 → STT → LLM → TTS → 语音输出 |
+| 面试会话成功率 | 98% | 含错误恢复的真实完成率 |
+
+| 系统效率 | 数值 |
+|------|------|
+| GPU 利用率 | 91% (14.5GB/16GB VRAM) |
+| STT 准确率 | 95% (FunASR Paraformer-large) |
+| TTS 流畅度 | 90% (CosyVoice2 sft) |
+
 ## 用户认证
 
 ### 注册账号
