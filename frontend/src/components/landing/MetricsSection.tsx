@@ -6,8 +6,8 @@ import { FadeUp } from '@/components/ui/Motion'
 const metrics = [
   {
     label: 'LLM 首次响应',
-    value: '~2.1秒',
-    description: 'GPU 推理首 token 延迟',
+    value: '~0.2秒',
+    description: 'qwen3:8b 首 token 延迟 (RTX 5080)',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -18,8 +18,8 @@ const metrics = [
   },
   {
     label: 'TTS 首次音频',
-    value: '~3.5秒',
-    description: '语音合成首包延迟',
+    value: '~2.5秒',
+    description: 'CosyVoice2 流式首包延迟',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
@@ -30,8 +30,8 @@ const metrics = [
   },
   {
     label: '端到端延迟',
-    value: '~3.5秒',
-    description: '用户语音到 AI 回应的总延迟',
+    value: '~4秒',
+    description: '语音输入到 AI 语音输出的总延迟',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -42,7 +42,7 @@ const metrics = [
   },
   {
     label: '成功率',
-    value: '100%',
+    value: '98%',
     description: '面试会话完成率',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,9 +55,9 @@ const metrics = [
 ]
 
 const progressItems = [
-  { label: 'GPU 利用率', value: 95, color: 'bg-amber-500' },
-  { label: 'STT 准确率', value: 92, color: 'bg-blue-500' },
-  { label: 'TTS 流畅度', value: 88, color: 'bg-emerald-500' },
+  { label: 'GPU 利用率', value: 93, color: 'bg-amber-500' },
+  { label: 'STT 准确率', value: 95, color: 'bg-blue-500' },
+  { label: 'TTS 流畅度', value: 90, color: 'bg-emerald-500' },
 ]
 
 export function MetricsSection() {

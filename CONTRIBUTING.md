@@ -45,5 +45,5 @@ what:
 
 validation:
 - phase123 smoke x3 passed
-- avg first token latency reduced to sub-second
+- avg first token latency reduced to ~0.2s (measured on RTX 5080)
 ```
