@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { api } from '@/services/api'
+import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 
 const roles = [
@@ -16,9 +17,42 @@ const roles = [
   { id: 'teacher', label: '教师', icon: GraduationCap, desc: '教育教学技能' },
 ]
 
+function LoginPromptModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useNavigate()
+
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-surface rounded-lg border border-border shadow-elevation-2 p-6 w-full max-w-sm mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-heading-24 font-semibold text-text mb-2">请先登录</h2>
+        <p className="text-copy-16 text-text-secondary mb-6">登录后可创建面试会话</p>
+        <div className="flex gap-3">
+          <Button variant="secondary" size="lg" className="flex-1" onClick={onClose}>
+            取消
+          </Button>
+          <Button size="lg" className="flex-1" onClick={() => navigate('/login')}>
+            去登录
+          </Button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 export function SetupPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { isAuthenticated } = useAuthStore()
   const [jobRole, setJobRole] = useState<string>('programmer')
   const [subRole, setSubRole] = useState('')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
@@ -27,6 +61,7 @@ export function SetupPage() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [llmConfig, setLlmConfig] = useState<Record<string, unknown>>({})
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -70,6 +105,10 @@ export function SetupPage() {
   }
 
   const handleStartInterview = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true)
+      return
+    }
     setCreating(true)
     setError('')
     try {
@@ -104,7 +143,7 @@ export function SetupPage() {
   }
 
   return (
-    <motion.div 
+    <motion.div
       className="max-w-2xl mx-auto space-y-8 p-6"
       variants={containerVariants}
       initial="hidden"
@@ -221,7 +260,7 @@ export function SetupPage() {
               )}
             </motion.div>
             {resumeFile && (
-              <motion.div 
+              <motion.div
                 className="flex items-center justify-between"
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -276,7 +315,7 @@ export function SetupPage() {
       </motion.div>
 
       {error && (
-        <motion.div 
+        <motion.div
           className="text-center py-3 rounded-xl bg-error/10 border border-error/20"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -293,6 +332,8 @@ export function SetupPage() {
           开始面试
         </Button>
       </motion.div>
+
+      <LoginPromptModal open={showLoginModal} onClose={() => setShowLoginModal(false)} />
     </motion.div>
   )
 }

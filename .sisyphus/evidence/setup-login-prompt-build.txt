@@ -1,0 +1,20 @@
+Build verification passed at 2026-04-15
+
+Changes made to SetupPage.tsx:
+1. Added import for useAuthStore from @/stores/authStore
+2. Added showLoginModal state variable
+3. Modified handleStartInterview to check isAuthenticated before proceeding
+4. Added LoginPromptModal component with:
+   - Centered overlay with dark semi-transparent background
+   - White/dark card with rounded-lg, border, shadow-elevation-2
+   - Geist typography classes
+   - "去登录" button (primary) that navigates to /login
+   - "取消" button (secondary) that closes the modal
+   - Click outside to close behavior
+
+Build output:
+✓ 2105 modules transformed
+✓ built in 686ms
+dist/index.html                   1.36 kB │ gzip:   0.64 kB
+dist/assets/index-BAG0Mm38.css   29.39 kB │ gzip:   6.36 kB
+dist/assets/index-D4PHg5_1.js   372.84 kB │ gzip: 117.83 kB
