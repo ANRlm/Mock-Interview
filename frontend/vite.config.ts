@@ -18,6 +18,8 @@ if (useDevHttps && !hasHttpsCert) {
   console.warn('VITE_DEV_HTTPS=true but dev cert is missing; fallback to HTTP.')
 }
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -33,11 +35,11 @@ export default defineConfig({
     https: httpsConfig,
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://backend:8000',
+        target: apiProxyTarget.replace('http', 'ws'),
         ws: true,
         changeOrigin: true,
       },
