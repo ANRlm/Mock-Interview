@@ -6,7 +6,7 @@ import { FadeUp } from '@/components/ui/Motion'
 const metrics = [
   {
     label: 'LLM 首次响应',
-    value: '~0.1秒',
+    value: '~0.12秒',
     description: 'qwen3:8b 首 token 延迟 (RTX 5080)',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,7 +55,7 @@ const metrics = [
 ]
 
 const progressItems = [
-  { label: 'GPU 利用率', value: 93, color: 'bg-amber-500' },
+  { label: 'GPU 利用率', value: 91, color: 'bg-amber-500' },
   { label: 'STT 准确率', value: 95, color: 'bg-blue-500' },
   { label: 'TTS 流畅度', value: 90, color: 'bg-emerald-500' },
 ]
