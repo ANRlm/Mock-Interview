@@ -53,16 +53,6 @@ services:
       retries: 15
       start_period: 25s
 
-  sensevoice:
-    image: youyouhe/sensevoice-asr-docker:latest
-    ports:
-      - "5001:5001"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5001/docs > /dev/null || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
 
   cosyvoice2:
     build:
@@ -181,9 +171,6 @@ services:
       FUNASR_TIMEOUT_SECONDS: 20
       FUNASR_USE_ITN: "true"
       FUNASR_EXTRA_PAYLOAD: "{}"
-      SENSEVOICE_BASE_URL: http://sensevoice:5001
-      SENSEVOICE_API_KEY: ""
-      SENSEVOICE_TIMEOUT_SECONDS: 20
       TTS_BACKEND: cosyvoice2-http
       COSYVOICE_BASE_URL: http://cosyvoice2:50000
       COSYVOICE_TTS_PATH: /inference_sft
@@ -225,27 +212,7 @@ services:
         condition: service_healthy
       funasr:
         condition: service_healthy
-      sensevoice:
-        condition: service_healthy
-      cosyvoice2:
-        condition: service_healthy
-      ollama_init:
-        condition: service_completed_successfully
-    ports:
-      - "8000:8000"
-    volumes:
-      - backend_data:/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()\"",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 20s
-
+    
   frontend:
     build:
       context: ./frontend
