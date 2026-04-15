@@ -6,7 +6,7 @@ import { FadeUp } from '@/components/ui/Motion'
 const metrics = [
   {
     label: 'LLM 首次响应',
-    value: '~0.2秒',
+    value: '~0.1秒',
     description: 'qwen3:8b 首 token 延迟 (RTX 5080)',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
