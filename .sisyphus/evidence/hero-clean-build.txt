@@ -1,0 +1,61 @@
+# Hero Section Clean Build Evidence
+
+## Build Command
+```
+npm run build
+```
+
+## Build Output
+```
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+vite v8.0.7 building client environment for production...
+✓ 2105 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   1.36 kB │ gzip:   0.63 kB
+dist/assets/index-BOJVnSJd.css   32.86 kB │ gzip:   6.75 kB
+dist/assets/index-yCM_SgDx.js   373.39 kB │ gzip: 118.04 kB
+
+✓ built in 670ms
+```
+
+## Verification
+- TypeScript compilation: PASSED
+- Vite production build: PASSED
+- No errors or warnings
+
+## Changes Made to FloatingMockup Component
+
+### Layout
+- Two-row composition: Top card (AI Chat) + Bottom row (Score + Status)
+- Container: `relative w-72 h-56`
+
+### Card 1 - AI Chat (top center)
+- Size: w-56 h-24
+- Position: top-0 left-8 (centered)
+- Z-index: z-30
+- Animation: y: [0, -8, 0], duration: 5s
+- Content: Avatar circle + "AI 面试官" + 3 message lines
+
+### Card 2 - Score (bottom left)
+- Size: w-32 h-20
+- Position: top-12 left-6
+- Z-index: z-20
+- Animation: y: [0, 6, 0], duration: 4.5s
+- Content: Circular progress ring (SVG) + "85 分" + "综合得分"
+
+### Card 3 - Status (bottom right)
+- Size: w-32 h-20
+- Position: top-12 right-6
+- Z-index: z-10
+- Animation: y: [0, 4, 0], duration: 4s, delay: 0.3s
+- Content: Status dot + "面试进行中" + "02:15"
+
+### Design Compliance
+- All cards use `bg-surface border border-border` (no bg-surface-elevated)
+- No raw colors like `text-green-500` (uses text-primary, text-text-muted)
+- Proper z-index values: z-10, z-20, z-30
+- All cards: `bg-surface border border-border rounded-lg shadow-elevation-1 p-3`
+- Imports updated to only include used icons: MessageSquare, BarChart3, Clock

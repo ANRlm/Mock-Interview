@@ -54,21 +54,22 @@ export function HomePage() {
 
       {sessions.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-medium text-text">最近的面试</h2>
+          <h2 className="text-heading-24 font-semibold text-text">最近的面试</h2>
           <div className="space-y-2">
             {sessions.slice(0, 5).map((session) => (
               <Card
                 key={session.id}
-                className="cursor-pointer hover:bg-surface/50"
+                elevation={0}
+                className="cursor-pointer rounded-lg border border-border bg-surface hover:border-border-hover transition-colors duration-fast"
                 onClick={() => navigate(`/interview/${session.id}`)}
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
-                    <p className="font-medium text-text">
+                    <p className="text-label-16 font-medium text-text">
                       {roles.find((r) => r.id === session.job_role)?.label || session.job_role}
                       {session.sub_role && ` · ${session.sub_role}`}
                     </p>
-                    <p className="text-sm text-text-muted">
+                    <p className="text-label-14 text-text-muted">
                       {new Date(session.created_at).toLocaleDateString('zh-CN')}
                     </p>
                   </div>

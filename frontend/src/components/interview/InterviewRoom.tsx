@@ -246,7 +246,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 px-6 py-4 shadow-geist-md"
+        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface px-6 py-4 shadow-elevation-2"
       >
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -261,8 +261,8 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
         <div className="flex items-center gap-4">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
             connected 
-              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
-              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+              ? 'bg-success/10 text-success' 
+              : 'bg-error/10 text-error'
           }`}>
             {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
             {connected ? '已连接' : '未连接'}
@@ -299,14 +299,14 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-5 py-4 flex items-center gap-4"
+            className="rounded-xl bg-warning/10 border border-warning/20 px-5 py-4 flex items-center gap-4"
           >
-            <AlertCircle size={22} className="text-amber-500 flex-shrink-0" />
+            <AlertCircle size={22} className="text-warning flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+              <p className="text-label-14 font-medium text-warning">
                 {micPermission === 'denied' ? '麦克风权限被拒绝' : '正在请求麦克风权限'}
               </p>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+              <p className="text-label-12 text-warning/80 mt-0.5">
                 {micPermission === 'denied' 
                   ? '请在浏览器设置中允许麦克风访问，然后刷新页面重试' 
                   : '请在弹出窗口中点击"允许"按钮授予麦克风权限'}
@@ -336,7 +336,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
 
           <div className="space-y-4">
             {inputMode === 'voice' ? (
-              <div className="flex items-center justify-center rounded-2xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 min-h-[350px] shadow-geist-md">
+              <div className="flex items-center justify-center rounded-2xl border border-border bg-surface min-h-[350px] shadow-elevation-2">
                 <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
               </div>
             ) : (
@@ -374,7 +374,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
             exit={{ opacity: 0, y: 30 }}
             transition={{ delay: 0.2 }}
           >
-            <Card className="border border-border dark:border-neutral-700 dark:bg-neutral-900 shadow-geist-md">
+            <Card className="border border-border bg-surface shadow-elevation-2">
               <CardContent className="space-y-4 p-5">
                 <div className="flex items-start gap-4">
                   <div className="flex-1">

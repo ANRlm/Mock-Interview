@@ -111,20 +111,20 @@ export function SetupPage() {
       animate="visible"
     >
       <motion.div className="text-center space-y-3" variants={itemVariants}>
-        <h1 className="text-4xl font-bold text-text">准备面试</h1>
-        <p className="text-lg text-text-secondary">上传简历并配置面试参数</p>
+        <h1 className="text-heading-40 font-bold text-text">准备面试</h1>
+        <p className="text-copy-18 text-text-secondary">上传简历并配置面试参数</p>
       </motion.div>
 
       <motion.div variants={itemVariants}>
-        <Card className="shadow-geist-md">
+        <Card className="shadow-elevation-2">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Settings size={20} className="text-primary" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">选择职位类型</h2>
-                <p className="text-sm text-text-muted">选择你想要练习的职位</p>
+                <h2 className="text-heading-24 font-semibold">选择职位类型</h2>
+                <p className="text-label-14 text-text-muted">选择你想要练习的职位</p>
               </div>
             </div>
           </CardHeader>
@@ -138,13 +138,13 @@ export function SetupPage() {
                     key={role.id}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.05 }}
+                    transition={{ delay: index * 0.05, duration: 0.2 }}
                     onClick={() => setJobRole(role.id)}
                     className={cn(
-                      'flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition-all text-center',
+                      'flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition-all duration-fast text-center',
                       isSelected
-                        ? 'border-primary bg-primary/10 text-primary shadow-geist-md'
-                        : 'border-border bg-surface hover:border-primary/50 text-text hover:shadow-geist-sm'
+                        ? 'border-primary bg-primary/10 text-primary shadow-elevation-2'
+                        : 'border-border bg-surface hover:border-primary/50 text-text hover:shadow-elevation-1'
                     )}
                   >
                     <div className={cn(
@@ -154,7 +154,7 @@ export function SetupPage() {
                       <Icon size={26} />
                     </div>
                     <span className="font-semibold text-base">{role.label}</span>
-                    <span className="text-xs text-text-muted">{role.desc}</span>
+                    <span className="text-label-12 text-text-muted">{role.desc}</span>
                   </motion.button>
                 )
               })}
@@ -164,22 +164,22 @@ export function SetupPage() {
       </motion.div>
 
       <motion.div variants={itemVariants}>
-        <Card className="shadow-geist-md">
+        <Card className="shadow-elevation-2">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <FileText size={20} className="text-primary" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">简历上传</h2>
-                <p className="text-sm text-text-muted">上传你的简历让 AI 更好地了解你</p>
+                <h2 className="text-heading-24 font-semibold">简历上传</h2>
+                <p className="text-label-14 text-text-muted">上传你的简历让 AI 更好地了解你</p>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <motion.div
               className={cn(
-                'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all',
+                'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-fast',
                 'hover:border-primary/50 hover:bg-primary/5',
                 resumeFile ? 'border-primary/50 bg-primary/5' : 'border-border'
               )}
@@ -201,8 +201,8 @@ export function SetupPage() {
                   <div className="w-16 h-16 rounded-xl bg-primary/10 mx-auto flex items-center justify-center">
                     <FileText size={28} className="text-primary" />
                   </div>
-                  <p className="font-semibold text-text text-lg">{resumeFile.name}</p>
-                  <p className="text-sm text-text-muted">
+                  <p className="font-semibold text-text text-copy-20">{resumeFile.name}</p>
+                  <p className="text-label-14 text-text-muted">
                     {(resumeFile.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
@@ -214,7 +214,7 @@ export function SetupPage() {
                   <p className="font-medium text-text">
                     拖拽简历文件或点击选择
                   </p>
-                  <p className="text-sm text-text-muted">
+                  <p className="text-label-14 text-text-muted">
                     支持 PDF、TXT、MD 格式
                   </p>
                 </div>
@@ -239,21 +239,21 @@ export function SetupPage() {
       </motion.div>
 
       <motion.div variants={itemVariants}>
-        <Card className="shadow-geist-md">
+        <Card className="shadow-elevation-2">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Settings size={20} className="text-primary" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">面试配置</h2>
-                <p className="text-sm text-text-muted">自定义你的面试体验</p>
+                <h2 className="text-heading-24 font-semibold">面试配置</h2>
+                <p className="text-label-14 text-text-muted">自定义你的面试体验</p>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-text">子角色（可选）</label>
+              <label className="text-label-14 font-semibold text-text">子角色（可选）</label>
               <Input
                 placeholder="例如：前端工程师、全栈开发"
                 value={subRole}
@@ -262,12 +262,12 @@ export function SetupPage() {
             </div>
 
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-text">LLM 配置</label>
+              <label className="text-label-14 font-semibold text-text">LLM 配置</label>
               <div className="rounded-xl border border-border bg-surface p-4">
                 {Object.keys(llmConfig).length > 0 ? (
-                  <pre className="text-xs text-text-muted overflow-x-auto">{JSON.stringify(llmConfig, null, 2)}</pre>
+                  <pre className="text-xs text-text-muted overflow-x-auto font-mono">{JSON.stringify(llmConfig, null, 2)}</pre>
                 ) : (
-                  <p className="text-sm text-text-muted">使用默认配置</p>
+                  <p className="text-label-14 text-text-muted">使用默认配置</p>
                 )}
               </div>
             </div>
@@ -277,11 +277,11 @@ export function SetupPage() {
 
       {error && (
         <motion.div 
-          className="text-center py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+          className="text-center py-3 rounded-xl bg-error/10 border border-error/20"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-label-14 text-error">{error}</p>
         </motion.div>
       )}
 

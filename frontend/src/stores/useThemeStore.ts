@@ -25,7 +25,12 @@ function resolveTheme(theme: ThemeMode): 'light' | 'dark' {
 
 function applyTheme(theme: 'light' | 'dark') {
   if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', theme)
+    const html = document.documentElement
+    if (theme === 'dark') {
+      html.classList.add('dark')
+    } else {
+      html.classList.remove('dark')
+    }
   }
 }
 

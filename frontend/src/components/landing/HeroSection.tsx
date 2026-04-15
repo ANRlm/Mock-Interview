@@ -1,71 +1,7 @@
 'use client'
 
+import { ArrowRight, ChevronDown, MessageSquare } from 'lucide-react'
 import { motion } from 'framer-motion'
-import Lottie from 'lottie-react'
-import { useEffect, useState } from 'react'
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
-
-const ANIMATION_URL = 'https://assets2.lottiefiles.com/packages/lf20_jcikwtux.json'
-
-function AnimatedPlaceholder() {
-  return (
-    <div className="w-64 h-64 relative">
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
-      <div className="absolute inset-8 rounded-full bg-gradient-to-br from-primary/10 to-transparent animate-pulse" />
-    </div>
-  )
-}
-
-function HeroAnimationInner() {
-  const [animationData, setAnimationData] = useState<object | null>(null)
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    fetch(ANIMATION_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch animation')
-        return res.json()
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setAnimationData(data)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError(true)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  if (error || !animationData) {
-    return <AnimatedPlaceholder />
-  }
-
-  return (
-    <div className="w-64 h-64">
-      <LottieAnimation animationData={animationData} />
-    </div>
-  )
-}
-
-function LottieAnimation({ animationData }: { animationData: object }) {
-  return <Lottie loop autoplay animationData={animationData} />
-}
-
-function HeroAnimationWithError() {
-  return (
-    <ErrorBoundary fallback={<AnimatedPlaceholder />}>
-      <HeroAnimationInner />
-    </ErrorBoundary>
-  )
-}
 
 const stats = [
   { value: '4+', label: '职位类型' },
@@ -73,90 +9,147 @@ const stats = [
   { value: '实时', label: '反馈分析' },
 ]
 
+function FloatingMockup() {
+  return (
+    <div className="relative w-72 h-64">
+
+      <motion.div
+        className="absolute top-0 left-0 w-64 bg-surface border border-border rounded-lg shadow-elevation-2 p-4"
+        animate={{ y: [0, -8, 0] }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+      >
+  
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+            <MessageSquare className="w-3.5 h-3.5 text-primary" />
+          </div>
+          <div>
+            <div className="text-label-14 font-medium text-text">AI 面试官</div>
+            <div className="text-label-12 text-text-muted flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              在线
+            </div>
+          </div>
+        </div>
+        
+
+        <div className="space-y-2">
+
+          <div className="flex justify-end">
+            <div className="max-w-[80%] px-2.5 py-1.5 rounded-lg rounded-br-sm bg-primary/10">
+              <div className="text-label-12 text-text-muted">自我介绍</div>
+            </div>
+          </div>
+
+          <div className="flex justify-start">
+            <div className="max-w-[85%] px-2.5 py-1.5 rounded-lg rounded-bl-sm border border-border bg-bg">
+              <div className="text-label-12 text-text-muted leading-relaxed">
+                请介绍一下你自己，以及你对这个岗位的理解。
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+
+      <motion.div
+        className="absolute bottom-0 right-0 w-48 bg-surface border border-border rounded-lg shadow-elevation-2 p-4"
+        animate={{ y: [0, 6, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-2 h-2 rounded-full bg-primary" />
+          <span className="text-label-14 text-text-muted">波形分析</span>
+        </div>
+        <div className="flex items-end gap-1 h-12">
+          {[0.4, 0.7, 1, 0.8, 0.6, 0.9, 0.5, 0.75, 0.85, 0.65, 0.55, 0.7].map((h, i) => (
+            <motion.div
+              key={i}
+              className="flex-1 bg-primary rounded-t"
+              initial={{ height: '20%' }}
+              animate={{ height: `${h * 100}%` }}
+              transition={{ duration: 0.4, delay: i * 0.05, ease: 'easeOut' }}
+            />
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.2 }
+  }
+}
+
+const EASE_OUT = 'easeOut' as const
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: EASE_OUT }
+  }
+}
+
 export function HeroSection() {
   return (
-    <section className="w-full min-h-[60vh] bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900 relative overflow-hidden">
-      <motion.div
-        className="absolute top-1/4 left-1/4 w-[350px] h-[350px] bg-primary/10 rounded-full blur-[100px]"
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.3, 0.5, 0.3],
-        }}
-        transition={{
-          duration: 8,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-      />
-      <motion.div
-        className="absolute bottom-1/4 right-1/4 w-[280px] h-[280px] bg-primary/5 rounded-full blur-[80px]"
-        animate={{
-          scale: [1.2, 1, 1.2],
-          opacity: [0.3, 0.5, 0.3],
-        }}
-        transition={{
-          duration: 6,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-      />
-
+    <section className="w-full min-h-[60vh] bg-bg relative overflow-hidden">
       <div className="max-w-6xl mx-auto px-6 lg:px-8 py-12 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-8 items-center">
+        <motion.div
+          className="grid lg:grid-cols-2 gap-8 items-center"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <div className="text-center lg:text-left">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <span className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
+            <motion.div variants={itemVariants}>
+              <span className="inline-block px-4 py-1.5 rounded-full bg-surface border border-border text-text-secondary text-sm font-medium mb-6">
                 AI 驱动的面试练习平台
               </span>
             </motion.div>
 
             <motion.h1
-              className="text-4xl lg:text-5xl font-bold tracking-tight mb-6 leading-tight"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
+              className="text-heading-40 lg:text-heading-56 font-bold tracking-tight mb-6 leading-tight text-text"
+              variants={itemVariants}
             >
-              <span className="text-text">模拟真实面试</span>
+              模拟真实面试
               <br />
-              <span className="text-primary">提升你的表现</span>
+              <span className="text-text">提升你的表现</span>
             </motion.h1>
 
             <motion.p
-              className="text-base text-text-secondary mb-8 max-w-lg"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-copy-18 text-text-muted mb-8 max-w-lg"
+              variants={itemVariants}
             >
               与先进的 AI 面试官进行实时对话练习，获得即时反馈和专业建议。
             </motion.p>
 
             <motion.div
               className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
+              variants={itemVariants}
             >
               <motion.a
                 href="/setup"
-                className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-primary text-white text-base font-medium hover:bg-primary-hover transition-colors"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-primary text-primary-foreground text-base font-medium"
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.2 }}
               >
                 开始面试
-                <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                <ArrowRight className="ml-2 w-5 h-5" />
               </motion.a>
 
               <motion.a
                 href="#features"
-                className="inline-flex items-center justify-center px-6 py-3 rounded-xl border-2 border-border text-text text-base font-medium hover:bg-surface transition-colors"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-lg border border-border bg-transparent text-text text-base font-medium hover:bg-surface hover:border-border-hover"
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.2 }}
               >
                 了解更多
               </motion.a>
@@ -164,14 +157,12 @@ export function HeroSection() {
 
             <motion.div
               className="mt-6 grid grid-cols-3 gap-6"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
+              variants={itemVariants}
             >
               {stats.map((stat, index) => (
                 <div key={index} className="text-center lg:text-left">
-                  <div className="text-xl font-bold text-primary">{stat.value}</div>
-                  <div className="text-sm text-text-muted">{stat.label}</div>
+                  <div className="text-heading-24 font-bold text-text">{stat.value}</div>
+                  <div className="text-label-14 text-text-muted">{stat.label}</div>
                 </div>
               ))}
             </motion.div>
@@ -181,21 +172,19 @@ export function HeroSection() {
             className="flex justify-center"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.5, delay: 0.3, ease: EASE_OUT }}
           >
-            <HeroAnimationWithError />
+            <FloatingMockup />
           </motion.div>
-        </div>
+        </motion.div>
       </div>
 
       <motion.div
         className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        animate={{ y: [0, 10, 0] }}
-        transition={{ duration: 2, repeat: Infinity }}
+        animate={{ y: [0, 8, 0] }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <svg className="w-6 h-6 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-        </svg>
+        <ChevronDown className="w-6 h-6 text-text-muted" />
       </motion.div>
     </section>
   )

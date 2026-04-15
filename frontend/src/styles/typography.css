@@ -1,0 +1,91 @@
+/* Geist Typography Scale */
+
+.text-heading-72 {
+  font-size: var(--text-heading-72);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--font-weight-bold);
+}
+
+.text-heading-64 {
+  font-size: var(--text-heading-64);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--font-weight-bold);
+}
+
+.text-heading-56 {
+  font-size: var(--text-heading-56);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--font-weight-bold);
+}
+
+.text-heading-40 {
+  font-size: var(--text-heading-40);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--font-weight-bold);
+}
+
+.text-heading-32 {
+  font-size: var(--text-heading-32);
+  line-height: var(--leading-snug);
+  font-weight: var(--font-weight-semibold);
+}
+
+.text-heading-24 {
+  font-size: var(--text-heading-24);
+  line-height: var(--leading-snug);
+  font-weight: var(--font-weight-semibold);
+}
+
+.text-copy-24 {
+  font-size: var(--text-copy-24);
+  line-height: var(--leading-normal);
+}
+
+.text-copy-20 {
+  font-size: var(--text-copy-20);
+  line-height: var(--leading-normal);
+}
+
+.text-copy-18 {
+  font-size: var(--text-copy-18);
+  line-height: var(--leading-normal);
+}
+
+.text-copy-16 {
+  font-size: var(--text-copy-16);
+  line-height: var(--leading-normal);
+}
+
+.text-copy-14 {
+  font-size: var(--text-copy-14);
+  line-height: var(--leading-normal);
+}
+
+.text-label-20 {
+  font-size: var(--text-label-20);
+  line-height: var(--leading-normal);
+  font-weight: var(--font-weight-medium);
+}
+
+.text-label-16 {
+  font-size: var(--text-label-16);
+  line-height: var(--leading-normal);
+  font-weight: var(--font-weight-medium);
+}
+
+.text-label-14 {
+  font-size: var(--text-label-14);
+  line-height: var(--leading-normal);
+  font-weight: var(--font-weight-medium);
+}
+
+.text-label-12 {
+  font-size: var(--text-label-12);
+  line-height: var(--leading-normal);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-wide);
+}

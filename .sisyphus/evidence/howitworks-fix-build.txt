@@ -1,0 +1,15 @@
+Build verification passed for HowItWorksSection.tsx changes.
+
+Command: cd /home/cnhyk/Interview/mock-interview/frontend && npm run build
+
+Output:
+- tsc -b && vite build completed successfully
+- 2105 modules transformed
+- dist/index.html: 1.36 kB (gzip: 0.63 kB)
+- dist/assets/index-dvClGPtR.css: 29.41 kB (gzip: 6.33 kB)
+- dist/assets/index-B3Jnk4Vx.js: 371.87 kB (gzip: 117.64 kB)
+- Built in 482ms
+
+Changes applied:
+1. Line 40: text-4xl font-bold mb-4 → text-heading-32 font-semibold mb-3 text-text
+2. Line 41: text-text-secondary text-lg → text-copy-16 text-text-secondary

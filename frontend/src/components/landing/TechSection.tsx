@@ -2,81 +2,84 @@
 
 import { motion } from 'framer-motion'
 import { FadeUp } from '@/components/ui/Motion'
+import {
+  Monitor,
+  Code2,
+  Palette,
+  Sparkles,
+  Package,
+  Route,
+  Puzzle,
+  Gem,
+  Server,
+  Database,
+  Wifi,
+  KeyRound,
+  Mic2,
+  Speaker,
+  Bot,
+  Brain,
+  Container,
+  Zap,
+  Cpu,
+  Globe,
+} from 'lucide-react'
 
 const frontendStack = [
-  { name: 'React 18.3', description: 'UI 框架', icon: '⚛️' },
-  { name: 'TypeScript', description: '类型安全', icon: '🔷' },
-  { name: 'Tailwind CSS', description: '样式框架', icon: '🎨' },
-  { name: 'Framer Motion', description: '动画库', icon: '✨' },
-  { name: 'Zustand', description: '状态管理', icon: '📦' },
-  { name: 'React Router', description: '路由管理', icon: '🛣️' },
-  { name: 'Radix UI', description: 'UI 组件', icon: '🧩' },
-  { name: 'Lucide React', description: '图标库', icon: '💎' },
+  { name: 'React 18.3', description: 'UI 框架', icon: Monitor },
+  { name: 'TypeScript', description: '类型安全', icon: Code2 },
+  { name: 'Tailwind CSS', description: '样式框架', icon: Palette },
+  { name: 'Framer Motion', description: '动画库', icon: Sparkles },
+  { name: 'Zustand', description: '状态管理', icon: Package },
+  { name: 'React Router', description: '路由管理', icon: Route },
+  { name: 'Radix UI', description: 'UI 组件', icon: Puzzle },
+  { name: 'Lucide React', description: '图标库', icon: Gem },
 ]
 
 const backendStack = [
-  { name: 'FastAPI', description: 'Web 框架', icon: '🚀' },
-  { name: 'PostgreSQL', description: '数据库', icon: '🗄️' },
-  { name: 'WebSocket', description: '实时通信', icon: '🔌' },
-  { name: 'JWT Auth', description: '身份验证', icon: '🔐' },
+  { name: 'FastAPI', description: 'Web 框架', icon: Server },
+  { name: 'PostgreSQL', description: '数据库', icon: Database },
+  { name: 'WebSocket', description: '实时通信', icon: Wifi },
+  { name: 'JWT Auth', description: '身份验证', icon: KeyRound },
 ]
 
 const aiStack = [
-  { name: 'FunASR', description: '语音识别(STT)', icon: '🎤' },
-  { name: 'CosyVoice2', description: '语音合成(TTS)', icon: '🔊' },
-  { name: 'Ollama', description: '本地 LLM 推理', icon: '🤖' },
-  { name: 'qwen3:8b', description: '语言模型', icon: '🧠' },
+  { name: 'FunASR', description: '语音识别(STT)', icon: Mic2 },
+  { name: 'CosyVoice2', description: '语音合成(TTS)', icon: Speaker },
+  { name: 'Ollama', description: '本地 LLM 推理', icon: Bot },
+  { name: 'qwen3:8b', description: '语言模型', icon: Brain },
 ]
 
 const infraStack = [
-  { name: 'Docker', description: '容器化', icon: '🐳' },
-  { name: 'Vite', description: '构建工具', icon: '⚡' },
-  { name: 'GPU Support', description: '硬件加速', icon: '🎮' },
-  { name: 'Nginx', description: '反向代理', icon: '🌐' },
+  { name: 'Docker', description: '容器化', icon: Container },
+  { name: 'Vite', description: '构建工具', icon: Zap },
+  { name: 'GPU Support', description: '硬件加速', icon: Cpu },
+  { name: 'Nginx', description: '反向代理', icon: Globe },
 ]
 
-const categoryConfig = {
-  frontend: { title: '前端技术', icon: '🛠️', color: 'from-blue-500 to-blue-600' },
-  backend: { title: '后端服务', icon: '⚙️', color: 'from-emerald-500 to-emerald-600' },
-  ai: { title: 'AI 能力', icon: '🤖', color: 'from-amber-500 to-amber-600' },
-  infra: { title: '基础设施', icon: '🏗️', color: 'from-purple-500 to-purple-600' },
-}
-
-function TechCard({ tech, index }: { tech: { name: string; description: string; icon: string }; index: number }) {
+function TechCard({ tech, index }: { tech: { name: string; description: string; icon: typeof Monitor }; index: number }) {
+  const Icon = tech.icon
   return (
     <motion.div
-      className="p-4 rounded-xl border border-border bg-surface hover:shadow-geist-md transition-shadow"
+      className="p-4 rounded-lg border border-border bg-bg hover:border-border-hover transition-colors duration-fast"
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.05, duration: 0.4 }}
     >
-      <div className="text-3xl mb-2">{tech.icon}</div>
-      <h4 className="font-medium text-text">{tech.name}</h4>
-      <p className="text-sm text-text-muted">{tech.description}</p>
+      <Icon className="w-5 h-5 text-text-muted mb-3" strokeWidth={1.5} />
+      <h4 className="text-label-14 font-medium text-text">{tech.name}</h4>
+      <p className="text-label-12 text-text-muted">{tech.description}</p>
     </motion.div>
   )
 }
 
-function TechCategory({
-  title,
-  icon,
-  techs,
-  color,
-}: {
-  title: string
-  icon: string
-  techs: typeof frontendStack
-  color: string
-}) {
+function TechCategory({ title, techs }: { title: string; techs: typeof frontendStack }) {
   return (
     <FadeUp>
-      <div className="space-y-6">
-        <h3 className="text-2xl font-semibold mb-6 flex items-center gap-3">
-          <span className="text-3xl">{icon}</span>
-          <span className={`bg-gradient-to-r ${color} bg-clip-text text-transparent`}>{title}</span>
-        </h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="space-y-4">
+        <h3 className="text-label-16 font-medium text-text">{title}</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {techs.map((tech, index) => (
             <TechCard key={tech.name} tech={tech} index={index} />
           ))}
@@ -88,40 +91,20 @@ function TechCategory({
 
 export function TechSection() {
   return (
-    <section className="w-full py-24 bg-bg">
+    <section className="w-full py-20 bg-bg">
       <div className="max-w-6xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">技术栈</h2>
-          <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            先进的技术带来极致的体验，20+ 技术组件构建完整系统
+          <h2 className="text-heading-32 font-semibold mb-3 text-text">技术栈</h2>
+          <p className="text-copy-16 text-text-secondary max-w-2xl mx-auto">
+            先进的技术带来极致的体验，多个技术组件构建完整系统
           </p>
         </FadeUp>
 
         <div className="grid lg:grid-cols-2 gap-12">
-          <TechCategory
-            title={categoryConfig.frontend.title}
-            icon={categoryConfig.frontend.icon}
-            techs={frontendStack}
-            color={categoryConfig.frontend.color}
-          />
-          <TechCategory
-            title={categoryConfig.backend.title}
-            icon={categoryConfig.backend.icon}
-            techs={backendStack}
-            color={categoryConfig.backend.color}
-          />
-          <TechCategory
-            title={categoryConfig.ai.title}
-            icon={categoryConfig.ai.icon}
-            techs={aiStack}
-            color={categoryConfig.ai.color}
-          />
-          <TechCategory
-            title={categoryConfig.infra.title}
-            icon={categoryConfig.infra.icon}
-            techs={infraStack}
-            color={categoryConfig.infra.color}
-          />
+          <TechCategory title="前端技术" techs={frontendStack} />
+          <TechCategory title="后端服务" techs={backendStack} />
+          <TechCategory title="AI 能力" techs={aiStack} />
+          <TechCategory title="基础设施" techs={infraStack} />
         </div>
       </div>
     </section>

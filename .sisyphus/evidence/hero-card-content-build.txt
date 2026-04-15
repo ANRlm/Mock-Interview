@@ -1,0 +1,9 @@
+Build successful.
+
+Output:
+- dist/index.html: 1.36 kB (gzip: 0.63 kB)
+- dist/assets/index-tl2B8mmM.css: 32.55 kB (gzip: 6.72 kB)
+- dist/assets/index-UhG9JV9V.js: 372.83 kB (gzip: 118.05 kB)
+- Total build time: 695ms
+
+No TypeScript errors or warnings.

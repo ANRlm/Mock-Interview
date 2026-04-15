@@ -2,14 +2,24 @@ import { type HTMLAttributes, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  elevation?: 0 | 1 | 2 | 3
   children: ReactNode
 }
 
-export function Card({ className, children, ...props }: CardProps) {
+const elevationClasses = {
+  0: 'shadow-elevation0',
+  1: 'shadow-elevation-1',
+  1.5: 'shadow-elevation-1b',
+  2: 'shadow-elevation-2',
+  3: 'shadow-elevation-3',
+}
+
+export function Card({ className, elevation = 1, children, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-surface shadow-geist-sm',
+        'rounded-lg border border-border bg-surface transition-shadow duration-normal',
+        elevationClasses[elevation],
         className
       )}
       {...props}

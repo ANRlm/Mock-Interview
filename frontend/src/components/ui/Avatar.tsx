@@ -16,7 +16,7 @@ export function Avatar({ className, initials = 'U', size = 'md', ...props }: Ava
   return (
     <div
       className={cn(
-        'flex items-center justify-center rounded-full bg-surface border border-border text-text font-medium',
+        'flex items-center justify-center rounded-full bg-surface border border-border text-text font-medium transition-colors duration-fast',
         sizes[size],
         className
       )}

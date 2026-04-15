@@ -1,0 +1,135 @@
+/**
+ * Geist Design System Tokens
+ * Based on Vercel Geist - vercel.com/geist
+ */
+
+:root {
+  --geist-bg: 255 255 255;
+  --geist-surface: 249 249 249;
+  --geist-text: 15 23 42;
+  --geist-text-secondary: 71 85 105;
+  --geist-text-muted: 148 163 184;
+  --geist-border: 229 231 235;
+  --geist-border-hover: 209 213 219;
+  --geist-primary: 79 70 229;
+  --geist-primary-hover: 99 102 241;
+  --geist-primary-foreground: 255 255 255;
+  --geist-success: 34 197 94;
+  --geist-warning: 234 179 8;
+  --geist-error: 239 68 68;
+  --shadow-color: 0 0 0;
+  --geist-focus-ring: 99 102 241;
+}
+
+.dark {
+  --geist-bg: 11 11 15;
+  --geist-surface: 20 20 26;
+  --geist-text: 229 231 235;
+  --geist-text-secondary: 148 163 184;
+  --geist-text-muted: 100 116 139;
+  --geist-border: 45 45 50;
+  --geist-border-hover: 65 65 75;
+  --geist-primary: 147 197 253;
+  --geist-primary-hover: 165 210 255;
+  --geist-primary-foreground: 15 23 42;
+  --geist-focus-ring: 165 210 255;
+}
+
+:root {
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+}
+
+:root {
+  --elevation-0: none;
+  --elevation-1: 0 0 0 1px rgba(var(--geist-border) / 0.5);
+  --elevation-1b: 0 1px 3px rgba(var(--shadow-color) / 0.1), 0 1px 2px rgba(var(--shadow-color) / 0.06);
+  --elevation-2: 0 4px 6px rgba(var(--shadow-color) / 0.05), 0 2px 4px rgba(var(--shadow-color) / 0.06), 0 12px 24px rgba(var(--shadow-color) / 0.08);
+  --elevation-3: 0 8px 16px rgba(var(--shadow-color) / 0.08), 0 4px 8px rgba(var(--shadow-color) / 0.06), 0 20px 32px rgba(var(--shadow-color) / 0.12);
+}
+
+:root {
+  --duration-micro: 120ms;
+  --duration-fast: 200ms;
+  --duration-normal: 300ms;
+  --duration-slow: 400ms;
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.4, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --theme-transition: 300ms var(--ease-out);
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+}
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --text-heading-72: 4.5rem;
+  --text-heading-64: 4rem;
+  --text-heading-56: 3.5rem;
+  --text-heading-40: 2.5rem;
+  --text-heading-32: 2rem;
+  --text-heading-24: 1.5rem;
+  --text-copy-24: 1.5rem;
+  --text-copy-20: 1.25rem;
+  --text-copy-18: 1.125rem;
+  --text-copy-16: 1rem;
+  --text-copy-14: 0.875rem;
+  --text-label-20: 1.25rem;
+  --text-label-16: 1rem;
+  --text-label-14: 0.875rem;
+  --text-label-12: 0.75rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --leading-tight: 1.2;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --tracking-tighter: -0.05em;
+  --tracking-tight: -0.025em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.025em;
+}
+
+:root {
+  --focus-ring: 0 0 0 2px var(--geist-bg), 0 0 0 4px var(--geist-focus-ring);
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-micro: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --theme-transition: 0ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

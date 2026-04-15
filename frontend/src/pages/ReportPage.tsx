@@ -60,7 +60,7 @@ export function ReportPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/20 mx-auto flex items-center justify-center">
+        <div className="w-16 h-16 rounded-full bg-error/10 mx-auto flex items-center justify-center">
           <span className="text-2xl">📋</span>
         </div>
         <p className="text-text-muted">{error || '报告不存在'}</p>
@@ -94,9 +94,9 @@ export function ReportPage() {
   }
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-500'
-    if (score >= 60) return 'text-amber-500'
-    return 'text-red-500'
+    if (score >= 80) return 'text-success'
+    if (score >= 60) return 'text-warning'
+    return 'text-error'
   }
 
   return (
@@ -107,17 +107,17 @@ export function ReportPage() {
       animate="visible"
     >
       <motion.div className="text-center space-y-3" variants={itemVariants}>
-        <h1 className="text-4xl font-bold text-text">面试报告</h1>
-        <p className="text-text-muted">
+        <h1 className="text-heading-40 font-bold text-text">面试报告</h1>
+        <p className="text-label-16 text-text-muted">
           生成时间：{new Date(report.generated_at).toLocaleString('zh-CN')}
         </p>
       </motion.div>
 
       <motion.div variants={itemVariants}>
-        <Card className="shadow-geist-md overflow-hidden">
+        <Card className="shadow-elevation-2 overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-primary/10 to-transparent">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">综合得分</h2>
+              <h2 className="text-heading-24 font-semibold">综合得分</h2>
               <Badge 
                 variant={report.total_score >= 70 ? 'success' : report.total_score >= 50 ? 'warning' : 'error'}
                 className="text-base px-3 py-1"
@@ -144,9 +144,9 @@ export function ReportPage() {
 
       {scores.length > 0 && (
         <motion.div variants={itemVariants}>
-          <Card className="shadow-geist-md">
+          <Card className="shadow-elevation-2">
             <CardHeader>
-              <h2 className="text-lg font-semibold">分项评分</h2>
+              <h2 className="text-heading-24 font-semibold">分项评分</h2>
             </CardHeader>
             <CardContent className="space-y-6">
               {scores.map((score, index) => (
@@ -163,14 +163,14 @@ export function ReportPage() {
                       {score.value?.toFixed(1)} / {score.max}
                     </span>
                   </div>
-                  <div className="h-3 bg-surface dark:bg-neutral-800 rounded-full overflow-hidden">
+                  <div className="h-3 bg-surface rounded-full overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${((score.value ?? 0) / score.max) * 100}%` }}
                       transition={{ duration: 0.8, delay: 0.2 + index * 0.1, ease: 'easeOut' }}
                       className={`h-full rounded-full ${
-                        (score.value ?? 0) >= 80 ? 'bg-emerald-500' :
-                        (score.value ?? 0) >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                        (score.value ?? 0) >= 80 ? 'bg-success' :
+                        (score.value ?? 0) >= 60 ? 'bg-warning' : 'bg-error'
                       }`}
                     />
                   </div>
@@ -184,9 +184,9 @@ export function ReportPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {report.strengths && report.strengths.length > 0 && (
           <motion.div variants={itemVariants}>
-            <Card className="shadow-geist-md h-full">
-              <CardHeader className="bg-emerald-50 dark:bg-emerald-900/10">
-                <h2 className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">💪 优点</h2>
+            <Card className="shadow-elevation-2 h-full">
+              <CardHeader className="bg-success/5">
+                <h2 className="text-heading-24 font-semibold text-success">💪 优点</h2>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
@@ -198,10 +198,10 @@ export function ReportPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.1 }}
                     >
-                      <span className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-emerald-600 dark:text-emerald-400 text-sm">✓</span>
+                      <span className="w-6 h-6 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-success text-sm">✓</span>
                       </span>
-                      <span className="text-sm leading-relaxed">{item}</span>
+                      <span className="text-label-16 leading-relaxed">{item}</span>
                     </motion.li>
                   ))}
                 </ul>
@@ -212,9 +212,9 @@ export function ReportPage() {
 
         {report.improvements && report.improvements.length > 0 && (
           <motion.div variants={itemVariants}>
-            <Card className="shadow-geist-md h-full">
-              <CardHeader className="bg-amber-50 dark:bg-amber-900/10">
-                <h2 className="text-lg font-semibold text-amber-600 dark:text-amber-400">💡 改进建议</h2>
+            <Card className="shadow-elevation-2 h-full">
+              <CardHeader className="bg-warning/5">
+                <h2 className="text-heading-24 font-semibold text-warning">💡 改进建议</h2>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
@@ -226,10 +226,10 @@ export function ReportPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.1 }}
                     >
-                      <span className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-amber-600 dark:text-amber-400 text-sm">→</span>
+                      <span className="w-6 h-6 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-warning text-sm">→</span>
                       </span>
-                      <span className="text-sm leading-relaxed">{item}</span>
+                      <span className="text-label-16 leading-relaxed">{item}</span>
                     </motion.li>
                   ))}
                 </ul>

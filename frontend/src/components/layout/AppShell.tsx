@@ -7,7 +7,12 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
   const { resolvedTheme } = useThemeStore()
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', resolvedTheme)
+    const html = document.documentElement
+    if (resolvedTheme === 'dark') {
+      html.classList.add('dark')
+    } else {
+      html.classList.remove('dark')
+    }
   }, [resolvedTheme])
 
   useEffect(() => {
@@ -17,7 +22,12 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
       if (theme === 'system') {
         const newResolved = mediaQuery.matches ? 'dark' : 'light'
         useThemeStore.setState({ resolvedTheme: newResolved })
-        document.documentElement.setAttribute('data-theme', newResolved)
+        const html = document.documentElement
+        if (newResolved === 'dark') {
+          html.classList.add('dark')
+        } else {
+          html.classList.remove('dark')
+        }
       }
     }
     mediaQuery.addEventListener('change', handleChange)

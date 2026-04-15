@@ -2,67 +2,30 @@
 
 import { motion } from 'framer-motion'
 import { FadeUp } from '@/components/ui/Motion'
+import { ArrowRight } from 'lucide-react'
 
 const pipelineSteps = [
-  {
-    label: '用户语音',
-    sublabel: 'Microphone Input',
-    color: 'from-blue-500 to-blue-600',
-    bgColor: 'bg-blue-500/10',
-    borderColor: 'border-blue-500/30',
-  },
-  {
-    label: 'FunASR STT',
-    sublabel: 'Speech to Text',
-    color: 'from-purple-500 to-purple-600',
-    bgColor: 'bg-purple-500/10',
-    borderColor: 'border-purple-500/30',
-  },
-  {
-    label: 'qwen3:8b LLM',
-    sublabel: 'AI Processing',
-    color: 'from-amber-500 to-amber-600',
-    bgColor: 'bg-amber-500/10',
-    borderColor: 'border-amber-500/30',
-  },
-  {
-    label: 'CosyVoice2 TTS',
-    sublabel: 'Text to Speech',
-    color: 'from-emerald-500 to-emerald-600',
-    bgColor: 'bg-emerald-500/10',
-    borderColor: 'border-emerald-500/30',
-  },
-  {
-    label: '语音输出',
-    sublabel: 'Audio Output',
-    color: 'from-rose-500 to-rose-600',
-    bgColor: 'bg-rose-500/10',
-    borderColor: 'border-rose-500/30',
-  },
+  { label: '用户语音', sublabel: 'Microphone Input' },
+  { label: 'FunASR STT', sublabel: 'Speech to Text' },
+  { label: 'qwen3:8b LLM', sublabel: 'AI Processing' },
+  { label: 'CosyVoice2 TTS', sublabel: 'Text to Speech' },
+  { label: '语音输出', sublabel: 'Audio Output' },
 ]
 
-function ArrowIcon() {
-  return (
-    <svg className="w-6 h-6 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-    </svg>
-  )
-}
-
-function PipelineBox({ step, index }: { step: typeof pipelineSteps[0]; index: number }) {
+function PipelineBox({ step, index }: { step: { label: string; sublabel: string }; index: number }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ delay: index * 0.1, duration: 0.5 }}
+      transition={{ delay: index * 0.1, duration: 0.4 }}
       className="relative flex flex-col items-center"
     >
-      <div className={`px-6 py-4 rounded-xl ${step.bgColor} border ${step.borderColor} backdrop-blur-sm`}>
-        <div className={`text-xl font-bold bg-gradient-to-r ${step.color} bg-clip-text text-transparent`}>
+      <div className="px-5 py-3 rounded-lg border border-border bg-surface">
+        <div className="text-label-16 font-medium text-text text-center">
           {step.label}
         </div>
-        <div className="text-xs text-text-muted mt-1">{step.sublabel}</div>
+        <div className="text-label-12 text-text-muted mt-0.5 text-center">{step.sublabel}</div>
       </div>
     </motion.div>
   )
@@ -70,13 +33,11 @@ function PipelineBox({ step, index }: { step: typeof pipelineSteps[0]; index: nu
 
 export function ArchitectureSection() {
   return (
-    <section className="w-full py-24 bg-surface relative overflow-hidden">
-      <div className="absolute inset-0 bg-grid-pattern opacity-5" />
-
+    <section className="w-full py-20 bg-surface">
       <div className="max-w-5xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">技术架构</h2>
-          <p className="text-text-secondary text-lg max-w-2xl mx-auto">
+          <h2 className="text-heading-32 font-semibold mb-3 text-text">技术架构</h2>
+          <p className="text-copy-16 text-text-secondary max-w-2xl mx-auto">
             实时语音面试管道：端到端延迟优化，支持本地 GPU 加速
           </p>
         </FadeUp>
@@ -94,7 +55,7 @@ export function ArchitectureSection() {
                     transition={{ delay: 0.3 + index * 0.1, duration: 0.4 }}
                     className="flex items-center px-2"
                   >
-                    <ArrowIcon />
+                    <ArrowRight className="w-4 h-4 text-text-muted" />
                   </motion.div>
                 )}
               </div>
@@ -107,9 +68,7 @@ export function ArchitectureSection() {
                 <PipelineBox step={step} index={index} />
                 {index < pipelineSteps.length - 1 && (
                   <div className="flex justify-center">
-                    <svg className="w-6 h-6 text-text-muted rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
+                    <ArrowRight className="w-4 h-4 text-text-muted rotate-90" />
                   </div>
                 )}
               </div>
@@ -120,24 +79,24 @@ export function ArchitectureSection() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: 0.6, duration: 0.5 }}
-            className="mt-12 p-6 rounded-2xl bg-bg/50 border border-border backdrop-blur-sm"
+            transition={{ delay: 0.6, duration: 0.4 }}
+            className="mt-12 p-6 rounded-lg border border-border bg-bg"
           >
             <div className="grid md:grid-cols-3 gap-6 text-center">
               <div>
-                <div className="text-2xl font-bold text-primary mb-1">STT</div>
-                <div className="text-sm text-text-secondary">FunASR 2-pass</div>
-                <div className="text-xs text-text-muted mt-1">高准确度语音识别</div>
+                <div className="text-heading-24 font-semibold text-text mb-1">STT</div>
+                <div className="text-label-14 text-text-secondary">FunASR 2-pass</div>
+                <div className="text-label-12 text-text-muted mt-1">高准确度语音识别</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-amber-500 dark:text-amber-400 mb-1">LLM</div>
-                <div className="text-sm text-text-secondary">qwen3:8b</div>
-                <div className="text-xs text-text-muted mt-1">本地 GPU 推理</div>
+                <div className="text-heading-24 font-semibold text-text mb-1">LLM</div>
+                <div className="text-label-14 text-text-secondary">qwen3:8b</div>
+                <div className="text-label-12 text-text-muted mt-1">本地 GPU 推理</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-emerald-500 dark:text-emerald-400 mb-1">TTS</div>
-                <div className="text-sm text-text-secondary">CosyVoice2</div>
-                <div className="text-xs text-text-muted mt-1">低延迟语音合成</div>
+                <div className="text-heading-24 font-semibold text-text mb-1">TTS</div>
+                <div className="text-label-14 text-text-secondary">CosyVoice2</div>
+                <div className="text-label-12 text-text-muted mt-1">低延迟语音合成</div>
               </div>
             </div>
           </motion.div>

@@ -1,0 +1,15 @@
+Build completed successfully at Wed Apr 15 21:54:04 CST 2026
+--- BUILD OUTPUT ---
+
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+vite v8.0.7 building client environment for production...
+[2Ktransforming...✓ 2105 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   1.36 kB │ gzip:   0.63 kB
+dist/assets/index-CzjO0yiL.css   32.33 kB │ gzip:   6.70 kB
+dist/assets/index-D4gfSoGm.js   372.13 kB │ gzip: 117.90 kB
+
+✓ built in 466ms
