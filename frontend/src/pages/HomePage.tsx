@@ -38,7 +38,7 @@ export function HomePage() {
   }, [])
 
   return (
-    <div className="space-y-12">
+    <div>
       <HeroSection />
       <HowItWorksSection />
       <FeaturesSection />

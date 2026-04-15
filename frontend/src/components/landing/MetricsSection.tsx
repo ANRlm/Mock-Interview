@@ -39,7 +39,7 @@ const progressItems = [
 
 export function MetricsSection() {
   return (
-    <section className="w-full py-20 bg-surface">
+    <section className="w-full pt-20 pb-0 bg-surface">
       <div className="max-w-5xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
           <h2 className="text-heading-32 font-semibold mb-3 text-text">性能指标</h2>
