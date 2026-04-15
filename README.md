@@ -36,7 +36,7 @@
 ### AI/ML
 
 - LLM: Ollama (qwen3:8b)
-- STT: FunASR (Paraformer-large) / SenseVoice
+- STT: FunASR (Paraformer-large)
 - TTS: CosyVoice2
 - Embedding: BAAI/bge-m3
 
@@ -164,7 +164,7 @@ docker compose -f docker-compose.gpu.yml ps
 ```bash
 curl -X POST http://127.0.0.1:8000/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"yourname","email":"you@example.com","password":"yourpassword"}'
+  -d '{"email":"you@example.com","password":"yourpassword"}'
 ```
 
 ### 登录
@@ -172,7 +172,7 @@ curl -X POST http://127.0.0.1:8000/api/auth/register \
 ```bash
 curl -X POST http://127.0.0.1:8000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"yourname","password":"yourpassword"}'
+  -d '{"email":"you@example.com","password":"yourpassword"}'
 ```
 
 **响应示例:**
@@ -181,7 +181,7 @@ curl -X POST http://127.0.0.1:8000/api/auth/login \
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
   "token_type": "bearer",
-  "user": {"id": 1, "username": "yourname", "email": "you@example.com"}
+  "user": {"id": "uuid", "email": "you@example.com"}
 }
 ```
 
