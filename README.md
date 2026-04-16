@@ -267,29 +267,29 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          前端 (React + Vite)                            │
-│                 AuthStore │ InterviewStore │ useWebSocket              │
+│                             (React + Vite)                              │
+│                 AuthStore │ InterviewStore │ useWebSocket               │
 └──────────────────────────────────┬──────────────────────────────────────┘
                                    │ HTTP + WebSocket
 ┌──────────────────────────────────▼──────────────────────────────────────┐
-│                        后端 (FastAPI + Uvicorn)                          │
-│  /api/auth/*      ← JWT 认证                                             │
-│  /api/sessions/*  ← 会话管理                                             │
-│  /api/sessions/{id}/resume   ← 简历上传                                   │
-│  /api/sessions/{id}/report   ← 报告生成                                  │
-│  /api/sessions/{id}/behavior ← 行为数据                                  │
-│  /ws/interview/{id}?token=  ← 实时面试                                  │
-└────────┬───────────────┬──────────────────────┬─────────────────────────┘
-         │               │                      │
-    ┌────▼────┐    ┌─────▼─────┐    ┌────────▼────────┐
-    │ SQLite/ │    │  Ollama   │    │  FunASR /      │
-    │PostgreSQL│   │ qwen3:8b │    │  SenseVoice    │
-    │ sessions│    │    GPU    │    │      (STT)      │
-    │ messages│    └───────────┘    └────────┬────────┘
-    │ reports │                        ┌─────▼────────┐
-    └─────────┘                          │  CosyVoice2  │
-                                         │    (TTS)    │
-                                         └─────────────┘
+│                         (FastAPI + Uvicorn)                             │
+│  /api/auth/*                                                            │         
+│  /api/sessions/*                                                        │
+│  /api/sessions/{id}/resume                                              │
+│  /api/sessions/{id}/report                                              │
+│  /api/sessions/{id}/behavior                                            │
+│  /ws/interview/{id}?token=                                              │
+└────────┬───────────────┬───────────────────┬────────────────────────────┘
+         │               │                   │
+    ┌────▼─────┐   ┌─────▼─────┐    ┌────────▼────────┐
+    │ SQLite/  │   │  Ollama   │    │     FunASR /    │
+    │PostgreSQL│   │ qwen3:8b  │    │    SenseVoice   │
+    │ sessions │   │    GPU    │    │     (STT)       │
+    │ messages │   └───────────┘    └────────┬────────┘
+    │ reports  │                       ┌─────▼────────┐
+    └──────────┘                       │  CosyVoice2  │
+                                       │    (TTS)     │
+                                       └──────────────┘
 ```
 
 ## 开发指南
