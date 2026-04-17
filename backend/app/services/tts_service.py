@@ -439,9 +439,13 @@ class TTSService:
                 try:
                     await task
                 except asyncio.CancelledError:
-                    pass
-                except Exception:
-                    pass
+                    raise
+                except Exception as e:
+                    logger.warning(
+                        "Error awaiting cancelled TTS candidate text_len=%s: %s",
+                        text_len,
+                        repr(e),
+                    )
 
         async def _launch_next_candidate() -> bool:
             nonlocal next_idx, next_launch_at, launched_count

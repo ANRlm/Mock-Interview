@@ -28,15 +28,23 @@ class SenseVoiceSTTService:
                 response = await client.get(f"{self._base_url}/healthz")
                 if response.status_code < 400:
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "SenseVoice health check failed (host=%s): %s",
+                self._base_url,
+                repr(e),
+            )
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.get(f"{self._base_url}/docs")
                 if response.status_code < 400:
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "SenseVoice docs endpoint check failed (host=%s): %s",
+                self._base_url,
+                repr(e),
+            )
         logger.warning(
             "SenseVoice health endpoint unavailable, runtime validation required"
         )

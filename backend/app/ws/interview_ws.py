@@ -333,7 +333,12 @@ async def _handle_candidate_text(
                     ):
                         break
                 except Exception:
-                    pass
+                    logger.warning(
+                        "TTS preflight check failed for session %s: %s",
+                        session_id,
+                        repr(e),
+                        exc_info=True,
+                    )
 
             async def flush_buffer(force: bool = False) -> None:
                 nonlocal first_flush_sent, first_audio_sent, tts_chunks, tts_bytes
