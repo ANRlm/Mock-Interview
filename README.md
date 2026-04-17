@@ -215,6 +215,60 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
 | `stt_final` 非空 | 语音识别有结果 |
 | `report_total_score` 存在 | 报告生成成功 |
 
+**最近验证结果 (2026-04-17):**
+
+| 指标 | 数值 |
+|------|------|
+| LLM 首 token 延迟 | ~10.4s (qwen3:8b Q4_K_M) |
+| TTS 首音频延迟 | ~15.2s |
+| TTS chunks | 17 (流式音频正常) |
+| STT 识别 | 成功 ("你好，我想回答这个问题。") |
+| 报告总分 | 61.34 |
+| 后端单元测试 | 13 passed, 1 warning |
+
+## 测试指南
+
+### 后端单元测试
+
+```bash
+# 在 backend 容器中运行
+docker exec mock-interview-backend-1 python3 -m pytest app/tests/ -v
+
+# 或在本地环境运行（需安装 pytest）
+cd backend && python3 -m pytest app/tests/ -v
+```
+
+### 前端 E2E 测试 (Playwright)
+
+> ⚠️ 需要系统安装 Playwright 浏览器依赖（libnspr4, libnss3 等）。在无头环境或缺少依赖时请跳过。
+
+```bash
+cd frontend
+npx playwright install chromium --with-deps  # 安装浏览器及依赖
+npx playwright test                           # 运行所有测试
+npx playwright test --project=chromium         # 仅 Chromium
+```
+
+### 冒烟测试 (E2E)
+
+```bash
+# 在 backend 容器中运行（需先启动所有服务）
+docker exec mock-interview-backend-1 python3 -m app.scripts.phase123_smoke \
+  --artifact-dir /tmp/smoke_run --register
+```
+
+### 健康检查
+
+```bash
+# 各服务健康状态
+curl http://127.0.0.1:8000/healthz     # 后端 API
+curl http://127.0.0.1:11434/api/tags   # Ollama (qwen3:8b)
+curl http://127.0.0.1:50000/openapi.json # CosyVoice2
+curl http://127.0.0.1:10095/             # FunASR
+# 前端
+curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
+```
+
 ## 行为分析
 
 面试过程中，系统实时分析：
