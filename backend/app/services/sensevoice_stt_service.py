@@ -48,7 +48,7 @@ class SenseVoiceSTTService:
         logger.warning(
             "SenseVoice health endpoint unavailable, runtime validation required"
         )
-        return True
+        return False
 
     async def transcribe_streaming(
         self,
