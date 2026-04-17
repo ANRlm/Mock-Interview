@@ -634,24 +634,24 @@ class TTSService:
             return parts
 
         first = parts[0].strip()
-        if len(first) <= 26 and _END_PUNCT_RE.search(first):
+        if len(first) <= 50 and _END_PUNCT_RE.search(first):
             return parts
 
         split_idx = -1
         for idx, ch in enumerate(first):
             if ch in {"。", "！", "？", "!", "?", "；", ";"}:
                 split_idx = idx
-                if idx + 1 >= 10:
+                if idx + 1 >= 15:
                     break
 
         if split_idx < 0:
             for idx, ch in enumerate(first):
-                if ch in {"，", ",", "、", "：", ":", " "} and idx + 1 >= 10:
+                if ch in {"，", ",", "、", "：", ":", " "} and idx + 1 >= 15:
                     split_idx = idx
                     break
 
         if split_idx < 0:
-            split_idx = min(len(first) - 1, 18)
+            split_idx = min(len(first) - 1, 40)
 
         head = first[: split_idx + 1].strip()
         tail = first[split_idx + 1 :].strip()

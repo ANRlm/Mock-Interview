@@ -80,9 +80,9 @@ class Settings(BaseSettings):
     TTS_SENTENCE_MAX_CHARS: int = 120
     TTS_SENTENCE_SOFT_CHARS: int = 64
     TTS_REQUEST_TIMEOUT_SECONDS: float = 20.0
-    TTS_FIRST_CHUNK_TIMEOUT_SECONDS: float = 6.5
+    TTS_FIRST_CHUNK_TIMEOUT_SECONDS: float = 5.0
     TTS_HEDGE_ENABLED: bool = True
-    TTS_HEDGE_DELAY_SECONDS: float = 0.85
+    TTS_HEDGE_DELAY_SECONDS: float = 0.55
     TTS_HEDGE_MAX_RACERS: int = 2
 
     TTS_CACHE_DIR: str = "./uploads/tts_cache"

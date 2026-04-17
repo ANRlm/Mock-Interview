@@ -12,6 +12,7 @@ import httpx
 import websockets
 
 from app.config import settings
+from app.services.sensevoice_stt_service import sensevoice_stt_service
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,9 @@ class STTService:
         self._extra_payload = self._parse_extra_payload(settings.FUNASR_EXTRA_PAYLOAD)
 
     async def ensure_model_ready(self) -> bool:
+        if self._backend == "sensevoice-http":
+            return await sensevoice_stt_service.ensure_model_ready()
+
         if self._backend != "funasr-http":
             logger.warning("Unsupported STT backend: %s", self._backend)
             return False
@@ -87,6 +91,15 @@ class STTService:
         pcm_bytes: bytes,
         sample_rate: int = _TARGET_SAMPLE_RATE,
     ) -> AsyncIterator[tuple[str, str]]:
+        if self._backend == "sensevoice-http":
+            # Delegate to SenseVoice service
+            async for event_type, text in sensevoice_stt_service.transcribe_stream_events(
+                pcm_bytes,
+                sample_rate,
+            ):
+                yield event_type, text
+            return
+
         if self._backend != "funasr-http":
             raise RuntimeError(f"Unsupported STT backend: {self._backend}")
 

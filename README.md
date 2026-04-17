@@ -304,7 +304,27 @@ curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
 | `COSYVOICE_MODE` | sft | 推荐，稳定可靠 |
 | `COSYVOICE_SPEED` | 1.6 | 质量优先 |
 | `TTS_SENTENCE_MAX_CHARS` | 120 | 长句自动切分 |
-| `TTS_FIRST_CHUNK_TIMEOUT_SECONDS` | 6.5 | 首包超时守卫 |
+| `TTS_FIRST_CHUNK_TIMEOUT_SECONDS` | 5.0 | 首包超时守卫（已优化） |
+| `TTS_HEDGE_DELAY_SECONDS` | 0.55 | 对冲延迟（已优化，原 0.85） |
+| `FIRST_CHUNK_MAX_CHARS` | 50 | 首段最大字符数（已优化，原 26） |
+
+### STT 优化 (2026-04-17)
+
+| 优化项 | 原值 | 新值 | 效果 |
+|--------|------|------|------|
+| STT 后端 | FunASR CPU | FunASR GPU (0.2.1) | 手动部署 |
+| 首段字符限制 | 26 | 50 | TTS 首音频提前 |
+| 对冲延迟 | 0.85s | 0.55s | 更快触发备选 |
+| 首包超时 | 6.5s | 5.0s | 更灵敏 |
+
+**已验证优化：**
+- `stt_service.py`: 添加 SenseVoice HTTP 后端支持（可切换）
+- `tts_service.py`: `_limit_first_chunk_complexity` 增大首段长度 26→50 字符
+- `config.py`: TTS 参数调优（`TTS_HEDGE_DELAY_SECONDS=0.55`, `TTS_FIRST_CHUNK_TIMEOUT_SECONDS=5.0`）
+
+**GPU 加速待手动部署：**
+FunASR GPU 镜像：`registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-gpu-0.2.1`
+部署后需更新 `docker-compose.gpu.yml` 中 funasr 服务镜像和添加 `gpus: all`
 
 ### HTTPS 开发环境
 
