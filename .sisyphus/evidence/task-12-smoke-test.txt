@@ -1,0 +1,49 @@
+# Evidence: Phase123 Smoke Test Verification
+# Task: Run existing backend smoke tests to verify system health
+
+## Step 1: Read the script
+Script: /home/cnhyk/Interview/mock-interview/backend/app/scripts/phase123_smoke.py
+Lines: 530
+Purpose: Phase1-3 smoke test - tests login, session creation, resume upload, WS interview round, report generation
+
+## Step 2: py_compile check
+Command: python3 -m py_compile /home/cnhyk/Interview/mock-interview/backend/app/scripts/phase123_smoke.py
+Result: PASSED - no syntax errors
+
+## Step 3: Import check (without Docker)
+Command: cd /home/cnhyk/Interview/mock-interview/backend && python3 -c "from app.scripts import phase123_smoke; print('import ok')"
+Result: FAILED - ModuleNotFoundError: No module named 'httpx'
+
+## Step 4: --help check (without Docker)
+Command: cd /home/cnhyk/Interview/mock-interview/backend && python3 -m app.scripts.phase123_smoke --help
+Result: FAILED - ModuleNotFoundError: No module named 'httpx'
+
+Note: Dependencies (httpx, websockets) are only available inside Docker container, not on host.
+
+## Step 5: Docker container status
+Command: docker ps -a --filter "name=mock-interview" --format "table {{.Names}}\t{{.Status}}"
+
+Containers:
+- mock-interview-frontend-1: Exited (255) 22 hours ago
+- mock-interview-backend-1: Exited (0) 44 hours ago
+- mock-interview-ollama_init-1: Exited (0) 44 hours ago
+- mock-interview-postgres-1: Exited (0) 44 hours ago
+- mock-interview-cosyvoice2-1: Exited (255) 22 hours ago
+- mock-interview-funasr-1: Exited (255) 22 hours ago
+- mock-interview-ollama-1: Exited (0) 44 hours ago
+
+Result: ALL CONTAINERS STOPPED - cannot run smoke test via docker exec
+
+## Summary
+- Script syntax: VALID
+- Script dependencies: NOT available on host (requires Docker container)
+- Backend services: NOT RUNNING (all containers stopped)
+- Smoke test execution: BLOCKED - containers must be started first
+
+## Conclusion
+The smoke test CANNOT be executed because:
+1. Backend Docker containers are not running
+2. Host environment lacks required Python packages (httpx, websockets)
+
+To run the smoke test, containers must be started first:
+  docker compose -f docker-compose.gpu.yml up -d
