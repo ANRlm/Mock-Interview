@@ -36,22 +36,22 @@ _TTS_MIN_HARD_CHARS = 3
 _TTS_SOFT_SPLIT_TRIGGER_CHARS = 12
 _TTS_FORCE_SPLIT_CHARS = 30
 _TTS_FORCE_SPLIT_AT = 18
-_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 4
-_TTS_EARLY_FORCE_SPLIT_CHARS = 5
-_TTS_EARLY_FORCE_SPLIT_AT = 3
-_TTS_FIRST_PCM_FLUSH_BYTES = 384
+_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 2
+_TTS_EARLY_FORCE_SPLIT_CHARS = 3
+_TTS_EARLY_FORCE_SPLIT_AT = 2
+_TTS_FIRST_PCM_FLUSH_BYTES = 96
 _TTS_PCM_FLUSH_BYTES = 12_000
-_TTS_FIRST_SEGMENT_TARGET_CHARS = 2
-_TTS_FIRST_SEGMENT_MAX_CHARS = 3
+_TTS_FIRST_SEGMENT_TARGET_CHARS = 1
+_TTS_FIRST_SEGMENT_MAX_CHARS = 2
 _TTS_STREAM_SEGMENT_TARGET_CHARS = 9
 _TTS_STREAM_SEGMENT_MAX_CHARS = 16
 _TTS_FIRST_SEGMENT_TARGET_CHARS_EN = 2
 _TTS_FIRST_SEGMENT_MAX_CHARS_EN = 3
 _TTS_STREAM_SEGMENT_TARGET_CHARS_EN = 6
 _TTS_STREAM_SEGMENT_MAX_CHARS_EN = 12
-_TTS_PREWARM_SESSION_COOLDOWN_SECONDS = 14.0
+_TTS_PREWARM_SESSION_COOLDOWN_SECONDS = 3.0
 _LAST_TTS_PREWARM_AT = 0.0
-_TTS_PREFLIGHT_SAMPLE_TEXT = "好的。"
+_TTS_PREFLIGHT_SAMPLE_TEXT = "好"
 
 
 @dataclass
@@ -322,23 +322,8 @@ async def _handle_candidate_text(
             first_flush_sent = False
             first_audio_sent = False
 
-            if (
-                queued_sentence_count == 0
-                and runtime.active_response_id == response_id
-                and not cancel_event.is_set()
-            ):
-                try:
-                    async for _ in tts_service.stream_synthesize(
-                        _TTS_PREFLIGHT_SAMPLE_TEXT
-                    ):
-                        break
-                except Exception:
-                    logger.warning(
-                        "TTS preflight check failed for session %s: %s",
-                        session_id,
-                        repr(e),
-                        exc_info=True,
-                    )
+            # Preflight removed - _warm_if_needed in _stream_sentence handles warmup
+            # This was adding unnecessary latency by blocking before real TTS
 
             async def flush_buffer(force: bool = False) -> None:
                 nonlocal first_flush_sent, first_audio_sent, tts_chunks, tts_bytes
@@ -698,19 +683,14 @@ def _resolve_llm_backend_label(agent: InterviewerAgent) -> str:
 def _drain_tts_ready_sentences(
     buffer: str,
     *,
-    aggressive: bool = False,
+    aggressive: bool = True,  # Always aggressive for low latency
 ) -> tuple[list[str], str]:
     ready: list[str] = []
     start = 0
-    soft_trigger = (
-        _TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS
-        if aggressive
-        else _TTS_SOFT_SPLIT_TRIGGER_CHARS
-    )
-    force_trigger = (
-        _TTS_EARLY_FORCE_SPLIT_CHARS if aggressive else _TTS_FORCE_SPLIT_CHARS
-    )
-    force_at = _TTS_EARLY_FORCE_SPLIT_AT if aggressive else _TTS_FORCE_SPLIT_AT
+    # Ultra low latency settings
+    soft_trigger = 3  # Trigger soft split very early
+    force_trigger = 8  # Force split after just 8 chars
+    force_at = 5  # Split at 5 chars when forcing
 
     for idx, char in enumerate(buffer):
         if char not in _TTS_END_MARKERS:

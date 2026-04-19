@@ -93,7 +93,7 @@ class TTSService:
         )
         self._hedge_enabled = bool(getattr(settings, "TTS_HEDGE_ENABLED", False))
         self._hedge_delay_seconds = max(
-            0.05, float(getattr(settings, "TTS_HEDGE_DELAY_SECONDS", 0.8))
+            0.05, float(getattr(settings, "TTS_HEDGE_DELAY_SECONDS", 0.3))
         )
         self._hedge_max_racers = max(
             1, int(getattr(settings, "TTS_HEDGE_MAX_RACERS", 2))
@@ -634,7 +634,7 @@ class TTSService:
             return parts
 
         first = parts[0].strip()
-        if len(first) <= 50 and _END_PUNCT_RE.search(first):
+        if len(first) <= 30 and _END_PUNCT_RE.search(first):
             return parts
 
         split_idx = -1
@@ -809,14 +809,17 @@ class TTSService:
         alpha_count = len(_EN_LETTER_RE.findall(text))
         cjk_count = len(_CJK_RE.findall(text))
 
-        if alpha_count > 0:
-            delay = min(delay, 0.62)
+        # Very short texts get faster hedge
+        if cjk_count <= 10 and alpha_count == 0:
+            delay = max(0.15, delay - 0.2)
+        elif alpha_count > 0:
+            delay = min(delay, 0.4)
         elif cjk_count >= 26:
-            delay = min(delay, 0.72)
+            delay = min(delay, 0.5)
         elif cjk_count <= 8 and alpha_count == 0:
-            delay = max(delay, 0.95)
+            delay = max(delay, 0.6)
 
-        return max(0.12, delay)
+        return max(0.1, delay)
 
     def _should_enable_hedge(
         self,

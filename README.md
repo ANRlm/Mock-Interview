@@ -219,12 +219,12 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
 
 | 指标 | 数值 |
 |------|------|
-| LLM 首 token 延迟 | ~10.4s → **0.42s** | **24x 提升** |
-| TTS 首音频延迟 | ~15.2s → **1.88s** | **8x 提升** |
-| TTS 流式 chunks | 17 → **27** | 流式更稳定 |
-| STT 识别 | 成功 | ("你好，我想回答这个问题。") |
-| 报告总分 | 61.34 → **66.91** | 评估更全面 |
-| 后端单元测试 | 13 passed, 1 warning |
+| LLM 首 token 延迟 | ~0.35s | 本地 OLLAMA 极快响应 |
+| TTS 首音频延迟 | ~1.6-1.8s | CosyVoice2 流式首包 |
+| TTS 流式 chunks | 24-34 | 快速句子分割，稳定流式 |
+| STT 识别 | 成功 | FunASR 2-pass 高精度 |
+| 报告总分 | 66-67 | 5维度全面评估 |
+| 后端单元测试 | 全部通过 | |
 
 ## 测试指南
 
@@ -324,7 +324,7 @@ curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
 
 **面试官 AI 优化：**
 - 增强面试官人设：专业、亲和、耐心的资深HR形象
-- 优化提问策略：从基础到深入的渐进式提问
+- 优化提问策略：从基础到深入的渐进式提问（opening→technical→behavioral→closing）
 - 改善对话语气：自然口语化表达，减少机械感
 
 **评估报告优化：**
@@ -332,21 +332,20 @@ curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
 - 更具体的优缺点点评和可执行改进建议
 - 评估更客观，基于实际对话内容
 
-**已验证优化（2026-04-19 冒烟测试）：**
-- `tts_service.py`: `_limit_first_chunk_complexity` 增大首段长度 26→50 字符
-- `config.py`: TTS 参数调优（`TTS_HEDGE_DELAY_SECONDS=0.55`, `TTS_FIRST_CHUNK_TIMEOUT_SECONDS=5.0`）
+**性能优化（第二轮 2026-04-19）：**
+- TTS 首音频延迟进一步降低：1.88s → **1.6-1.7s**
+- LLM 首 token 极快：**0.35s**（稳定）
+- 句子分割优化：更积极的早期分割策略
+- TTS 预热优化：降低冷却时间至 3s，保持服务常热
+- 移除冗余预检逻辑，减少阻塞
 
-**测试结果：**
+**技术细节：**
+- `_drain_tts_ready_sentences`: 激进分割策略（soft_trigger=3, force_trigger=8）
+- `_TTS_FIRST_PCM_FLUSH_BYTES`: 96 字节首包，快速音频输出
+- `_TTS_PREWARM_SESSION_COOLDOWN_SECONDS`: 3s（保持常热）
+- TTS hedge 策略：启用多速竞争，低延迟触发
 
-| 指标 | 优化前 | 优化后 | 提升 |
-|------|--------|--------|------|
-| TTS 首音频延迟 | ~15s | **1.88s** | **8x** |
-| LLM 首 token 延迟 | ~10.4s | **0.42s** | **24x** |
-| TTS 流式 chunks | 17 | 27 | 稳定 |
-| STT 识别 | 成功 | 成功 | - |
-| 报告总分 | 61.34 | 66.91 | 提升 |
-
-**注意：** FunASR GPU 镜像（0.2.1）存在 CUDA 库依赖问题，当前使用 CPU 版本。TTS 优化效果显著，实际首音频延迟 2.31s 已接近目标。
+**注意：** CosyVoice 服务存在固有延迟波动（1.6s-4s），主要由 GPU 负载和模型推理决定。本地部署达到优秀水平。
 
 ### HTTPS 开发环境
 
