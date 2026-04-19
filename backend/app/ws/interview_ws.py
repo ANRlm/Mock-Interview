@@ -36,13 +36,13 @@ _TTS_MIN_HARD_CHARS = 3
 _TTS_SOFT_SPLIT_TRIGGER_CHARS = 12
 _TTS_FORCE_SPLIT_CHARS = 30
 _TTS_FORCE_SPLIT_AT = 18
-_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 2
-_TTS_EARLY_FORCE_SPLIT_CHARS = 3
-_TTS_EARLY_FORCE_SPLIT_AT = 2
-_TTS_FIRST_PCM_FLUSH_BYTES = 96
+_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 4
+_TTS_EARLY_FORCE_SPLIT_CHARS = 5
+_TTS_EARLY_FORCE_SPLIT_AT = 3
+_TTS_FIRST_PCM_FLUSH_BYTES = 192
 _TTS_PCM_FLUSH_BYTES = 12_000
-_TTS_FIRST_SEGMENT_TARGET_CHARS = 1
-_TTS_FIRST_SEGMENT_MAX_CHARS = 2
+_TTS_FIRST_SEGMENT_TARGET_CHARS = 2
+_TTS_FIRST_SEGMENT_MAX_CHARS = 3
 _TTS_STREAM_SEGMENT_TARGET_CHARS = 9
 _TTS_STREAM_SEGMENT_MAX_CHARS = 16
 _TTS_FIRST_SEGMENT_TARGET_CHARS_EN = 2
@@ -683,14 +683,14 @@ def _resolve_llm_backend_label(agent: InterviewerAgent) -> str:
 def _drain_tts_ready_sentences(
     buffer: str,
     *,
-    aggressive: bool = True,  # Always aggressive for low latency
+    aggressive: bool = False,  # Balanced for quality and speed
 ) -> tuple[list[str], str]:
     ready: list[str] = []
     start = 0
-    # Ultra low latency settings
-    soft_trigger = 3  # Trigger soft split very early
-    force_trigger = 8  # Force split after just 8 chars
-    force_at = 5  # Split at 5 chars when forcing
+    # Balanced settings for quality and speed
+    soft_trigger = 6 if aggressive else 12
+    force_trigger = 8 if aggressive else 20
+    force_at = 4 if aggressive else 15
 
     for idx, char in enumerate(buffer):
         if char not in _TTS_END_MARKERS:
