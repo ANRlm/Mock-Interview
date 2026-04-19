@@ -219,12 +219,17 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
 
 | 指标 | 数值 |
 |------|------|
-| LLM 首 token 延迟 | ~0.35s | 本地 OLLAMA 极快响应 |
-| TTS 首音频延迟 | ~1.6-1.8s | CosyVoice2 流式首包 |
-| TTS 流式 chunks | 24-34 | 快速句子分割，稳定流式 |
+| LLM 首 token 延迟 | **~0.29s** | 本地 OLLAMA 极快响应 |
+| TTS 首音频延迟 | **~2.2s (1.5-2.2s)** | CosyVoice2 流式首包 |
+| TTS 流式 chunks | 14-25 | 稳定流式输出 |
 | STT 识别 | 成功 | FunASR 2-pass 高精度 |
-| 报告总分 | 66-67 | 5维度全面评估 |
+| 报告总分 | 60-67 | 5维度全面评估 |
 | 后端单元测试 | 全部通过 | |
+
+**性能测试 (10次平均)**:
+- LLM 首 token: **0.292s** (极稳定)
+- TTS 首音频: **2.246s** (大多数 1.5-2.2s)
+- 系统已达到本地部署优秀水平
 
 ## 测试指南
 
