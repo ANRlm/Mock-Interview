@@ -47,6 +47,9 @@ class _RaceCandidate:
 
 
 class TTSService:
+    _keep_warm_task: asyncio.Task | None = None
+    _last_keep_warm_at: float = 0.0
+
     def __init__(self) -> None:
         self._cache_dir = Path(settings.TTS_CACHE_DIR)
         self._cache_dir.mkdir(parents=True, exist_ok=True)
@@ -145,6 +148,39 @@ class TTSService:
 
     async def warmup_if_needed(self) -> None:
         await self._warm_if_needed()
+        # Start background keep-warm task
+        self._start_keep_warm()
+
+    def _start_keep_warm(self) -> None:
+        """Start background task to keep TTS warm."""
+        if TTSService._keep_warm_task and not TTSService._keep_warm_task.done():
+            return
+        TTSService._keep_warm_task = asyncio.create_task(self._keep_warm_loop())
+
+    async def _keep_warm_loop(self) -> None:
+        """Periodically send warmup requests to keep CosyVoice hot."""
+        while True:
+            try:
+                await asyncio.sleep(30)  # Every 30 seconds
+                if time.perf_counter() - self._last_keep_warm_at > 25:
+                    await self._do_keep_warm()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                pass
+
+    async def _do_keep_warm(self) -> None:
+        """Send a minimal warmup request."""
+        try:
+            endpoint = self._resolve_endpoint(self._active_mode())
+            payload = self._build_payload_for_mode("好", self._active_mode())
+            async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+                async with client.stream("POST", endpoint, data=payload) as resp:
+                    async for _ in resp.aiter_bytes():
+                        break
+            self._last_keep_warm_at = time.perf_counter()
+        except Exception:
+            pass
 
     def prepare_text_for_tts(self, text: str, *, fallback: str = "请继续。") -> str:
         return tts_text_normalizer.normalize(text, fallback=fallback)
@@ -244,24 +280,12 @@ class TTSService:
         primary_endpoint = self._resolve_endpoint(active_mode)
         primary_payload = self._build_payload_for_mode(sentence, active_mode)
 
+        # Simplified: only use primary candidate for speed
         attempt_candidates: list[tuple[str, dict[str, object]]] = [
             (primary_endpoint, primary_payload)
         ]
 
-        if settings.TTS_ENABLE_EN_TO_ZH and _has_english(sentence):
-            slower_payload = dict(primary_payload)
-            slower_payload["speed"] = max(1.1, float(primary_payload["speed"]) - 0.18)
-            attempt_candidates.append((primary_endpoint, slower_payload))
-
-        slower_payload_2 = dict(primary_payload)
-        slower_payload_2["speed"] = max(1.1, float(primary_payload["speed"]) - 0.28)
-        attempt_candidates.append((primary_endpoint, slower_payload_2))
-
-        if _EN_PHONETIC_RE.search(sentence):
-            slower_payload_3 = dict(primary_payload)
-            slower_payload_3["speed"] = max(1.05, float(primary_payload["speed"]) - 0.4)
-            attempt_candidates.append((primary_endpoint, slower_payload_3))
-
+        # Only add fallback if instruct mode
         if active_mode == "instruct":
             fallback_endpoint = self._resolve_endpoint("sft")
             fallback_payload = self._build_payload_for_mode(sentence, "sft")
@@ -828,17 +852,8 @@ class TTSService:
         *,
         is_first_segment: bool,
     ) -> bool:
-        if not self._hedge_enabled:
-            return False
-        if self._hedge_max_racers <= 1:
-            return False
-        if len(attempt_candidates) <= 1:
-            return False
-        if len(text.strip()) <= 6:
-            return False
-
-        endpoints = {endpoint for endpoint, _ in attempt_candidates}
-        return len(endpoints) > 1
+        # Always disabled - simpler is faster
+        return False
 
     async def _stream_with_retries(
         self,
