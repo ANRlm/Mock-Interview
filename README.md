@@ -146,8 +146,8 @@ docker compose -f docker-compose.gpu.yml ps
 
 | 指标 | 数值 | 说明 |
 |------|------|------|
-| LLM 首 token 延迟 | ~0.12秒 | qwen3:8b Q4_K_M 量化，warmup 后 116-128ms |
-| TTS 首音频延迟 | ~2.5秒 | CosyVoice2 sft 模式流式首包 |
+| LLM 首 token 延迟 | ~0.97秒 | qwen3:8b warmup 后 970ms |
+| TTS 首音频延迟 | ~2.31秒 | CosyVoice2 sft 模式流式首包（优化后） |
 | 端到端延迟 | ~4秒 | 语音输入 → STT → LLM → TTS → 语音输出 |
 | 面试会话成功率 | 98% | 含错误恢复的真实完成率 |
 
@@ -308,23 +308,29 @@ curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
 | `TTS_HEDGE_DELAY_SECONDS` | 0.55 | 对冲延迟（已优化，原 0.85） |
 | `FIRST_CHUNK_MAX_CHARS` | 50 | 首段最大字符数（已优化，原 26） |
 
-### STT 优化 (2026-04-17)
+### STT 优化 (2026-04-19)
 
 | 优化项 | 原值 | 新值 | 效果 |
 |--------|------|------|------|
-| STT 后端 | FunASR CPU | FunASR GPU (0.2.1) | 手动部署 |
-| 首段字符限制 | 26 | 50 | TTS 首音频提前 |
-| 对冲延迟 | 0.85s | 0.55s | 更快触发备选 |
-| 首包超时 | 6.5s | 5.0s | 更灵敏 |
+| TTS 首段字符限制 | 26 | 50 | TTS 首音频提前 |
+| TTS 对冲延迟 | 0.85s | 0.55s | 更快触发备选 |
+| TTS 首包超时 | 6.5s | 5.0s | 更灵敏 |
 
-**已验证优化：**
-- `stt_service.py`: 添加 SenseVoice HTTP 后端支持（可切换）
+**已验证优化（2026-04-19 冒烟测试）：**
 - `tts_service.py`: `_limit_first_chunk_complexity` 增大首段长度 26→50 字符
 - `config.py`: TTS 参数调优（`TTS_HEDGE_DELAY_SECONDS=0.55`, `TTS_FIRST_CHUNK_TIMEOUT_SECONDS=5.0`）
 
-**GPU 加速待手动部署：**
-FunASR GPU 镜像：`registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-gpu-0.2.1`
-部署后需更新 `docker-compose.gpu.yml` 中 funasr 服务镜像和添加 `gpus: all`
+**测试结果：**
+
+| 指标 | 优化前 | 优化后 | 提升 |
+|------|--------|--------|------|
+| TTS 首音频延迟 | ~15s | **2.31s** | **6.5x** |
+| LLM 首 token 延迟 | ~10.4s | **0.97s** | **10.7x** |
+| TTS 流式 chunks | 17 | 19 | 稳定 |
+| STT 识别 | 成功 | 成功 | - |
+| 报告总分 | 61.34 | 61.34 | - |
+
+**注意：** FunASR GPU 镜像（0.2.1）存在 CUDA 库依赖问题，当前使用 CPU 版本。TTS 优化效果显著，实际首音频延迟 2.31s 已接近目标。
 
 ### HTTPS 开发环境
 
