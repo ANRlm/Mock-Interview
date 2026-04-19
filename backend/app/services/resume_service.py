@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _SECTION_ALIASES: dict[str, tuple[str, ...]] = {
     "summary": (
@@ -72,16 +75,76 @@ def read_resume_text(path: str) -> str:
     if suffix in {".txt", ".md"}:
         return file_path.read_text(encoding="utf-8", errors="ignore")
 
-    if suffix != ".pdf":
+    if suffix == ".pdf":
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(file_path) as pdf:
+                return "\n".join((page.extract_text() or "") for page in pdf.pages)
+        except Exception:
+            return ""
+
+    if suffix in {".docx", ".doc"}:
+        return _read_docx_or_doc(file_path)
+
+    return ""
+
+
+def _read_docx_or_doc(file_path: Path) -> str:
+    """Read .docx and .doc files and extract text."""
+    suffix = file_path.suffix.lower()
+
+    if suffix == ".docx":
+        try:
+            import docx
+
+            doc = docx.Document(file_path)
+            paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
+            return "\n".join(paragraphs)
+        except Exception as exc:
+            logger.warning("Failed to read .docx file %s: %s", file_path, exc)
+            return ""
+
+    if suffix == ".doc":
+        # Try python-docx first (for some .doc files that are actually DOCX)
+        try:
+            import docx
+
+            doc = docx.Document(file_path)
+            paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
+            if paragraphs:
+                return "\n".join(paragraphs)
+        except Exception:
+            pass
+
+        # Try textract as fallback
+        try:
+            import textract
+
+            text = textract.process(str(file_path), method="antiword")
+            return text.decode("utf-8", errors="ignore").strip()
+        except Exception:
+            pass
+
+        # Try textract with other methods
+        for method in ["catdoc", "wvText"]:
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    [method, str(file_path)],
+                    capture_output=True,
+                    timeout=30,
+                )
+                if result.returncode == 0:
+                    return result.stdout.decode("utf-8", errors="ignore").strip()
+            except Exception:
+                continue
+
+        logger.warning("No suitable converter found for .doc file %s", file_path)
         return ""
 
-    try:
-        import pdfplumber
-
-        with pdfplumber.open(file_path) as pdf:
-            return "\n".join((page.extract_text() or "") for page in pdf.pages)
-    except Exception:
-        return ""
+    return ""
 
 
 def parse_resume_text(text: str) -> dict[str, Any]:

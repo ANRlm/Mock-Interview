@@ -36,7 +36,7 @@ async def upload_resume(
         raise HTTPException(status_code=404, detail="Session not found")
 
     suffix = Path(file.filename or "resume.pdf").suffix.lower()
-    if suffix not in {".pdf", ".txt", ".md"}:
+    if suffix not in {".pdf", ".txt", ".md", ".docx", ".doc"}:
         raise HTTPException(status_code=400, detail="Unsupported resume file type")
 
     target_dir = Path(settings.UPLOAD_DIR) / str(session_id)
