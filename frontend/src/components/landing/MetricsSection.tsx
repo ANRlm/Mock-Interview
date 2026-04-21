@@ -7,13 +7,13 @@ import { Zap, Volume2, Clock, CheckCircle } from 'lucide-react'
 const metrics = [
   {
     label: 'LLM 首次响应',
-    value: '~0.12秒',
-    description: 'qwen3:8b 首 token 延迟 (RTX 5080)',
+    value: '~0.33秒',
+    description: 'qwen3:8b 首 token 延迟',
     icon: Zap,
   },
   {
     label: 'TTS 首次音频',
-    value: '~2.5秒',
+    value: '~1.5-2.7秒',
     description: 'CosyVoice2 流式首包延迟',
     icon: Volume2,
   },
@@ -32,7 +32,6 @@ const metrics = [
 ]
 
 const progressItems = [
-  { label: 'GPU 利用率', value: 91 },
   { label: 'STT 准确率', value: 95 },
   { label: 'TTS 流畅度', value: 90 },
 ]

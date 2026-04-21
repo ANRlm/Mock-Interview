@@ -146,14 +146,13 @@ docker compose -f docker-compose.gpu.yml ps
 
 | 指标 | 数值 | 说明 |
 |------|------|------|
-| LLM 首 token 延迟 | ~0.97秒 | qwen3:8b warmup 后 970ms |
-| TTS 首音频延迟 | ~2.31秒 | CosyVoice2 sft 模式流式首包（优化后） |
+| LLM 首 token 延迟 | ~0.33秒 | qwen3:8b 热身后 330ms（冷启 1.1s） |
+| TTS 首音频延迟 | ~1.5-2.7秒 | CosyVoice2 sft 模式流式首包 |
 | 端到端延迟 | ~4秒 | 语音输入 → STT → LLM → TTS → 语音输出 |
 | 面试会话成功率 | 98% | 含错误恢复的真实完成率 |
 
 | 系统效率 | 数值 |
 |------|------|
-| GPU 利用率 | 91% (14.5GB/16GB VRAM) |
 | STT 准确率 | 95% (FunASR Paraformer-large) |
 | TTS 流畅度 | 90% (CosyVoice2 sft) |
 
@@ -215,20 +214,20 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
 | `stt_final` 非空 | 语音识别有结果 |
 | `report_total_score` 存在 | 报告生成成功 |
 
-**最近验证结果 (2026-04-19):**
+**最近验证结果 (2026-04-21):**
 
 | 指标 | 数值 |
 |------|------|
-| LLM 首 token 延迟 | **~0.29s** | 本地 OLLAMA 极快响应 |
-| TTS 首音频延迟 | **~2.2s (1.5-2.2s)** | CosyVoice2 流式首包 |
-| TTS 流式 chunks | 14-25 | 稳定流式输出 |
+| LLM 首 token 延迟 | **~0.33s** | qwen3:8b 热身后响应（冷启 ~1.1s） |
+| TTS 首音频延迟 | **~1.5-2.7s** | CosyVoice2 流式首包 |
+| TTS 流式 chunks | 17-18 | 稳定流式输出 |
 | STT 识别 | 成功 | FunASR 2-pass 高精度 |
-| 报告总分 | 60-67 | 5维度全面评估 |
+| 报告总分 | 60 | 5维度全面评估 |
 | 后端单元测试 | 全部通过 | |
 
-**性能测试 (10次平均)**:
-- LLM 首 token: **0.292s** (极稳定)
-- TTS 首音频: **2.246s** (大多数 1.5-2.2s)
+**性能测试 (3次平均)**:
+- LLM 首 token: **~0.33s** (热身后极稳定)
+- TTS 首音频: **~2.2s** (范围 1.5-2.7s，受 GPU 负载影响）
 - 系统已达到本地部署优秀水平
 
 ## 测试指南
