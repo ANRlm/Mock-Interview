@@ -8,13 +8,13 @@ const metrics = [
   {
     label: 'LLM 首次响应',
     value: '~0.33秒',
-    description: 'qwen3:8b 首 token 延迟',
+    description: 'qwen3:8b 热身后首 token 延迟',
     icon: Zap,
   },
   {
     label: 'TTS 首次音频',
-    value: '~1.5-2.7秒',
-    description: 'CosyVoice2 流式首包延迟',
+    value: '~1.5秒',
+    description: 'CosyVoice2 流式首包（热身后最优）',
     icon: Volume2,
   },
   {
