@@ -852,7 +852,7 @@ class TTSService:
         *,
         is_first_segment: bool,
     ) -> bool:
-        # Always disabled - simpler is faster
+        # Always disabled - simpler is faster for sft mode with single candidate
         return False
 
     async def _stream_with_retries(

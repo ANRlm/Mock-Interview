@@ -146,8 +146,8 @@ docker compose -f docker-compose.gpu.yml ps
 
 | 指标 | 数值 | 说明 |
 |------|------|------|
-| LLM 首 token 延迟 | ~0.33秒 | qwen3:8b 热身后 330ms（冷启 1.1s） |
-| TTS 首音频延迟 | ~1.5-2.7秒 | CosyVoice2 sft 模式流式首包 |
+| LLM 首 token 延迟 | ~0.35秒 | qwen3:8b 热身后 350ms（冷启 ~1.1s） |
+| TTS 首音频延迟 | ~1.5-2.9秒 | CosyVoice2 sft 模式流式首包 |
 | 端到端延迟 | ~4秒 | 语音输入 → STT → LLM → TTS → 语音输出 |
 | 面试会话成功率 | 98% | 含错误恢复的真实完成率 |
 

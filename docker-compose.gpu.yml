@@ -38,7 +38,7 @@ services:
           --itn-dir thuduj12/fst_itn_zh \
           --lm-dir damo/speech_ngram_lm_zh-cn-ai-wesp-fst \
           --decoder-thread-num "$$decoder_thread_num" \
-          --model-thread-num 1 \
+          --model-thread-num 2 \
           --io-thread-num "$$io_thread_num" \
           --port 10095 \
           --hotword /workspace/FunASR/runtime/websocket/hotwords.txt
@@ -88,6 +88,9 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       OLLAMA_KEEP_ALIVE: 24h
+      OLLAMA_NUM_PARALLEL: 4
+      OLLAMA_MAX_LOADED_MODELS: 2
+      OLLAMA_GPU_OVERHEAD: "0"
     ports:
       - "11434:11434"
     volumes:
@@ -192,7 +195,7 @@ services:
       TTS_REQUEST_TIMEOUT_SECONDS: 20
       TTS_FIRST_CHUNK_TIMEOUT_SECONDS: 5.0
       TTS_HEDGE_ENABLED: "true"
-      TTS_HEDGE_DELAY_SECONDS: 0.3
+      TTS_HEDGE_DELAY_SECONDS: 0.55
       TTS_HEDGE_MAX_RACERS: 2
       COSYVOICE_EXTRA_PAYLOAD: "{}"
       DATABASE_URL: postgresql+asyncpg://mockuser:mockpassword@postgres:5432/mock_interview
