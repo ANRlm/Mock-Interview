@@ -218,16 +218,16 @@ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
 
 | 指标 | 数值 |
 |------|------|
-| LLM 首 token 延迟 | **~0.33s** | qwen3:8b 热身后响应（冷启 ~1.5s） |
-| TTS 首音频延迟 | **~1.5-2.8s** | CosyVoice2 流式首包 |
-| TTS 流式 chunks | 19-26 | 稳定流式输出 |
+| LLM 首 token 延迟 | **~0.35s** | qwen3:8b 热身后响应（冷启 ~1.6s） |
+| TTS 首音频延迟 | **~1.5-3.1s** | CosyVoice2 流式首包 |
+| TTS 流式 chunks | 18-22 | 稳定流式输出 |
 | STT 识别 | 成功 | FunASR 2-pass 高精度 |
 | 报告总分 | 66-67 | 5维度全面评估 |
 | 后端单元测试 | 全部通过 | |
 
 **性能测试 (3次最新)**:
-- LLM 首 token: **~0.33s** (热身后极稳定)
-- TTS 首音频: **~2.1s** (范围 1.5-4.1s，受 GPU 负载影响）
+- LLM 首 token: **~0.35s** (热身后极稳定，范围 0.33-0.37s)
+- TTS 首音频: **~2.5s** (范围 1.5-3.1s，受 GPU 负载影响）
 - 系统已达到本地部署优秀水平
 
 ## 测试指南
