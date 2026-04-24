@@ -306,13 +306,13 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
           <AudioPanel level={0} active={isRecording || isManualRecording} />
         </div>
 
-        <div className="flex flex-col min-h-0 p-3 gap-3">
+        <div className="flex flex-col min-h-0 overflow-hidden p-3 gap-3">
           {inputMode === 'voice' ? (
             <div className="flex-1 flex items-center justify-center rounded-2xl border border-border bg-surface min-h-[180px]">
               <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
             </div>
           ) : (
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <ChatPanel
                 messages={messages}
                 streamText={streamText}

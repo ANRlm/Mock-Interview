@@ -23,7 +23,7 @@ export function ChatPanel({ messages, streamText, onReadAloud, ttsPlayingFor, in
 
   return (
     <div className="flex flex-col rounded-xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 min-h-0 flex-1 overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === 'candidate' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] rounded-xl px-4 py-3 ${
