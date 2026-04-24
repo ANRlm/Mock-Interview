@@ -7,7 +7,6 @@ import { ChatPanel } from './ChatPanel'
 import { AudioPanel } from './AudioPanel'
 import { AIVoiceAnimation } from './AIVoiceAnimation'
 import { StatusBar } from './StatusBar'
-import { PosePip } from './PosePip'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
 import { Card, CardContent } from '@/components/ui/Card'
@@ -234,44 +233,32 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
   const turnCount = messages.filter((m) => m.role === 'candidate').length
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6 p-6 max-w-7xl mx-auto"
-    >
-      <PosePip />
-
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface px-6 py-4 shadow-elevation-2"
-      >
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border bg-surface flex-shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Mic2 size={22} className="text-primary" />
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Mic2 size={18} className="text-primary" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-widest text-text-muted">面试进行中</p>
-            <p className="text-base font-semibold text-text">AI 模拟面试</p>
+            <p className="text-[10px] uppercase tracking-widest text-text-muted">面试进行中</p>
+            <p className="text-sm font-semibold text-text">AI 模拟面试</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-            connected 
-              ? 'bg-success/10 text-success' 
+
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+            connected
+              ? 'bg-success/10 text-success'
               : 'bg-error/10 text-error'
           }`}>
-            {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
+            {connected ? <Wifi size={10} /> : <WifiOff size={10} />}
             {connected ? '已连接' : '未连接'}
           </div>
-          
-          <div className="flex items-center gap-2">
-            <Button 
-              variant={inputMode === 'voice' ? 'primary' : 'secondary'} 
-              size="sm" 
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant={inputMode === 'voice' ? 'primary' : 'secondary'}
+              size="sm"
               onClick={() => {
                 if (inputMode !== 'voice') {
                   if (micPermission !== 'granted') {
@@ -281,17 +268,18 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
                 }
               }}
               disabled={requestingMic}
+              className="h-8 text-xs"
             >
-              {requestingMic ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Mic size={14} className="mr-1" />}
+              {requestingMic ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Mic size={12} className="mr-1" />}
               语音模式
             </Button>
-            <Button variant={inputMode === 'text' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('text')}>
-              <MicOff size={14} className="mr-1" />文本模式
+            <Button variant={inputMode === 'text' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('text')} className="h-8 text-xs">
+              <MicOff size={12} className="mr-1" />文本模式
             </Button>
-            <Button variant="outline" size="sm" onClick={handleEnd}>结束面试</Button>
+            <Button variant="outline" size="sm" onClick={handleEnd} className="h-8 text-xs">结束面试</Button>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       <AnimatePresence>
         {inputMode === 'voice' && micPermission !== 'granted' && (
@@ -299,119 +287,95 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="rounded-xl bg-warning/10 border border-warning/20 px-5 py-4 flex items-center gap-4"
+            className="flex items-center gap-2 px-4 py-2 bg-warning/10 border-b border-warning/20 text-xs flex-shrink-0"
           >
-            <AlertCircle size={22} className="text-warning flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-label-14 font-medium text-warning">
-                {micPermission === 'denied' ? '麦克风权限被拒绝' : '正在请求麦克风权限'}
-              </p>
-              <p className="text-label-12 text-warning/80 mt-0.5">
-                {micPermission === 'denied' 
-                  ? '请在浏览器设置中允许麦克风访问，然后刷新页面重试' 
-                  : '请在弹出窗口中点击"允许"按钮授予麦克风权限'}
-              </p>
-            </div>
+            <AlertCircle size={14} className="text-warning flex-shrink-0" />
+            <span className="text-warning flex-1">
+              {micPermission === 'denied' ? '麦克风权限被拒绝，请检查浏览器设置' : '正在请求麦克风权限...'}
+            </span>
             {micPermission === 'denied' && (
-              <Button variant="outline" size="sm" onClick={requestMicPermission}>
-                重试
-              </Button>
+              <Button variant="outline" size="sm" onClick={requestMicPermission} className="h-6 text-xs">重试</Button>
             )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={inputMode}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.3 }}
-          className="grid gap-6 lg:grid-cols-[280px_1fr_280px]"
-        >
-          <div className="space-y-4">
-            <AudioPanel level={0} active={isRecording || isManualRecording} />
-          </div>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[260px_1fr_260px] min-h-0 gap-0">
+        <div className="hidden lg:flex flex-col p-3 border-r border-border bg-surface/50">
+          <AudioPanel level={0} active={isRecording || isManualRecording} />
+        </div>
 
-          <div className="space-y-4">
-            {inputMode === 'voice' ? (
-              <div className="flex items-center justify-center rounded-2xl border border-border bg-surface min-h-[350px] shadow-elevation-2">
-                <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
-              </div>
-            ) : (
-              <ChatPanel 
-                messages={messages} 
-                streamText={streamText} 
-                onReadAloud={handleReadAloud} 
-                ttsPlayingFor={ttsPlayingFor} 
-                inputMode={inputMode} 
-                stage={stage} 
+        <div className="flex flex-col min-h-0 p-3 gap-3">
+          {inputMode === 'voice' ? (
+            <div className="flex-1 flex items-center justify-center rounded-2xl border border-border bg-surface min-h-[180px]">
+              <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0">
+              <ChatPanel
+                messages={messages}
+                streamText={streamText}
+                onReadAloud={handleReadAloud}
+                ttsPlayingFor={ttsPlayingFor}
+                inputMode={inputMode}
+                stage={stage}
               />
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="space-y-4">
-            <StatusBar 
-              stage={stage} 
-              connected={connected} 
-              turnCount={turnCount} 
-              sttPreview={sttPreview} 
-              ttsQueueSize={ttsQueueSize} 
-              recording={isRecording} 
-              ttsProviderLabel={ttsProviderLabel} 
-              llmStats={llmStats} 
-            />
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {inputMode === 'text' && (
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="border border-border bg-surface shadow-elevation-2">
-              <CardContent className="space-y-4 p-5">
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
+          <AnimatePresence>
+            {inputMode === 'text' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <Card className="border border-border bg-surface">
+                  <CardContent className="flex items-end gap-2 p-3">
                     <Textarea
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       placeholder="输入你的回答..."
                       disabled={!connected}
-                      className="min-h-[100px] resize-none"
+                      className="flex-1 min-h-[60px] max-h-[120px] resize-none text-sm"
                     />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button 
-                      variant={manualVoiceActive ? 'primary' : 'secondary'} 
-                      size="sm" 
-                      onClick={handleManualVoiceToggle}
-                      className="h-10 px-3"
-                    >
-                      <Mic size={16} />
-                    </Button>
-                    <Button 
-                      onClick={handleSendText} 
-                      disabled={!input.trim() || !connected}
-                      className="h-10"
-                    >
-                      <Send size={16} className="mr-1" />发送
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-xs text-text-muted">
-                  当前为文本模式，支持语音输入。点击麦克风图标进行语音输入。
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+                    <div className="flex flex-col gap-1.5">
+                      <Button
+                        variant={manualVoiceActive ? 'primary' : 'secondary'}
+                        size="sm"
+                        onClick={handleManualVoiceToggle}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Mic size={14} />
+                      </Button>
+                      <Button
+                        onClick={handleSendText}
+                        disabled={!input.trim() || !connected}
+                        className="h-8"
+                      >
+                        <Send size={14} />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="hidden lg:flex flex-col p-3 border-l border-border bg-surface/50">
+          <StatusBar
+            stage={stage}
+            connected={connected}
+            turnCount={turnCount}
+            sttPreview={sttPreview}
+            ttsQueueSize={ttsQueueSize}
+            recording={isRecording}
+            ttsProviderLabel={ttsProviderLabel}
+            llmStats={llmStats}
+          />
+        </div>
+        </div>
+    </div>
   )
 }

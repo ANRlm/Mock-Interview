@@ -38,7 +38,7 @@ export function StatusBar({
   llmStats,
 }: StatusBarProps) {
   return (
-    <div className="flex flex-col rounded-xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 p-4 h-[200px] space-y-4">
+    <div className="flex flex-col rounded-xl border border-border dark:border-neutral-700 bg-surface dark:bg-neutral-900 p-4 flex-1 min-h-0 overflow-y-auto space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-muted">连接状态</span>
         {connected ? (
