@@ -87,6 +87,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
         setSttPreview(text)
         if (text) {
           currentResponseIdRef.current = ''
+          clearStreamText()
           setLlmStats(null)
           const nextTurn = messages.filter((m) => m.role === 'candidate').length + 1
           addMessage(localMessage({ session_id: sessionId, role: 'candidate', content: text, turn_index: nextTurn }))
