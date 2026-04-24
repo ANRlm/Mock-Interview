@@ -312,7 +312,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
               <AIVoiceAnimation stage={stage as 'thinking' | 'speaking'} />
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0">
               <ChatPanel
                 messages={messages}
                 streamText={streamText}
@@ -336,6 +336,12 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
                     <Textarea
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendText()
+                        }
+                      }}
                       placeholder="输入你的回答..."
                       disabled={!connected}
                       className="flex-1 min-h-[60px] max-h-[120px] resize-none text-sm"
