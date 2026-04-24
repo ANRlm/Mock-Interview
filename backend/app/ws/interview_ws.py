@@ -39,7 +39,7 @@ _TTS_FORCE_SPLIT_AT = 18
 _TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 4
 _TTS_EARLY_FORCE_SPLIT_CHARS = 5
 _TTS_EARLY_FORCE_SPLIT_AT = 3
-_TTS_FIRST_PCM_FLUSH_BYTES = 192
+_TTS_FIRST_PCM_FLUSH_BYTES = 96
 _TTS_PCM_FLUSH_BYTES = 12_000
 _TTS_FIRST_SEGMENT_TARGET_CHARS = 2
 _TTS_FIRST_SEGMENT_MAX_CHARS = 3
@@ -409,7 +409,6 @@ async def _handle_candidate_text(
                         len(tts_input),
                         exc,
                     )
-
             tts_queue.task_done()
 
     tts_worker_task = asyncio.create_task(_tts_worker())
@@ -589,9 +588,6 @@ async def _handle_audio_turn(
         await runtime.send_json({"type": "stt_final", "text": final_text})
         if not final_text.strip() or runtime.response_cancel_event.is_set():
             return
-
-        if runtime.response_task and asyncio.current_task() is runtime.response_task:
-            runtime.response_task = None
 
         await runtime.start_response(final_text)
     except asyncio.CancelledError:

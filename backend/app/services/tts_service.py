@@ -852,8 +852,11 @@ class TTSService:
         *,
         is_first_segment: bool,
     ) -> bool:
-        # Always disabled - simpler is faster for sft mode with single candidate
-        return False
+        if not self._hedge_enabled:
+            return False
+        if len(attempt_candidates) < 2:
+            return False
+        return True
 
     async def _stream_with_retries(
         self,
