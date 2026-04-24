@@ -374,13 +374,22 @@ async def _handle_candidate_text(
                     }
                 )
 
-            async for pcm_chunk in tts_service.stream_synthesize(tts_input):
-                if cancel_event.is_set() or runtime.active_response_id != response_id:
-                    break
-                pcm_buffer.extend(pcm_chunk)
-                await flush_buffer(force=False)
-
-            await flush_buffer(force=True)
+            try:
+                async for pcm_chunk in tts_service.stream_synthesize(tts_input):
+                    if cancel_event.is_set() or runtime.active_response_id != response_id:
+                        break
+                    pcm_buffer.extend(pcm_chunk)
+                    await flush_buffer(force=False)
+            except Exception as exc:
+                logger.warning(
+                    "TTS preflight check failed session=%s text_len=%s error=%s",
+                    session_id,
+                    len(tts_input),
+                    exc,
+                    exc_info=True,
+                )
+            finally:
+                await flush_buffer(force=True)
             return first_flush_sent
 
         while True:
