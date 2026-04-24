@@ -56,8 +56,6 @@ export function SetupPage() {
   const [jobRole, setJobRole] = useState<string>('programmer')
   const [subRole, setSubRole] = useState('')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
-  const [resumeStatus, setResumeStatus] = useState<'empty' | 'uploaded'>('empty')
-  const [uploading, setUploading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [llmConfig, setLlmConfig] = useState<Record<string, unknown>>({})
@@ -87,20 +85,6 @@ export function SetupPage() {
     const file = e.target.files?.[0]
     if (file) {
       setResumeFile(file)
-    }
-  }
-
-  const handleUploadResume = async () => {
-    if (!resumeFile) return
-    setUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', resumeFile)
-      await api.postForm('/sessions/_resume_temp_/resume', formData)
-      setResumeStatus('uploaded')
-    } catch {
-    } finally {
-      setUploading(false)
     }
   }
 
@@ -265,12 +249,7 @@ export function SetupPage() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
               >
-                <Badge variant={resumeStatus === 'uploaded' ? 'success' : 'default'}>
-                  {resumeStatus === 'uploaded' ? '已解析' : '待上传'}
-                </Badge>
-                <Button variant="secondary" size="sm" onClick={handleUploadResume} loading={uploading}>
-                  上传简历
-                </Button>
+                <Badge variant="default">待开始面试时上传</Badge>
               </motion.div>
             )}
           </CardContent>
