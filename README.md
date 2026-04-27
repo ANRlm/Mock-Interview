@@ -344,7 +344,7 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 
 ### 2026-04-27（Bug 修复 + 重构）
 
-**修复的关键 Bug（15个）：**
+**修复的关键 Bug（18个）：**
 
 | 严重程度 | 问题 | 修复 |
 |----------|------|------|
@@ -363,11 +363,30 @@ docker compose -f docker-compose.gpu.yml up -d frontend
 | 🟡 中 | `stt_service.py` / `sensevoice_stt_service.py`: 使用已废弃的 `audioop`（Python 3.13 已移除） | 提取 `app/services/audio_utils.py`，纯 Python 线性插值重采样 |
 | 🟡 中 | `report_service.py`: 报告创建/更新路径约 50 行完全重复 | 提取 `_apply_report_fields()` 辅助函数 |
 | 🟡 中 | `main.py`: 缺少 `Content-Security-Policy` 和 `Referrer-Policy` 安全响应头 | 加入两个 header |
+| 🟡 中 | TTS WS 常量不一致：`tts_ws.py` 用 384 字节，`interview_ws.py` 用 96 字节 | 统一为 96 字节 |
+| 🟡 中 | `interview_ws.py`: audio_chunk 异常处理中 bare `pass` 静默吞异常 | 改为 `logger.warning(exc_info=True)` |
+| 🟡 中 | `interview_ws.py`: `_LAST_TTS_PREWARM_AT` 全局状态从不重置（理论风险） | 文档化风险，评估后无需修复 |
 
 **新增内容：**
 - `app/services/audio_utils.py`：共享 PCM 重采样模块，消除重复代码
 - `app/api/transcribe.py`：手动语音转文本 REST 端点（支持 pydub/PyAV/直通三种模式）
 - 后端测试从 13 条增至 21 条，全部通过
+
+**性能优化（RTX 5080 优化）：**
+
+| 优化项 | 优化前 | 优化后 | 文件 |
+|--------|--------|--------|------|
+| Ollama 并行数 | 16 | 32 | docker-compose.gpu.yml |
+| Ollama 加载模型数 | 4 | 8 | docker-compose.gpu.yml |
+| STT Workers | 2 | 8 | backend/app/config.py |
+| TTS Workers | 2 | 8 | backend/app/config.py |
+| LLM Streams | 4 | 16 | backend/app/config.py |
+| 并发会话数 | 4 | 16 | backend/app/config.py |
+| TTS 首包字节 | 96 | 48 | interview_ws.py, tts_ws.py |
+| TTS 首包超时 | 5.0s | 4.0s | backend/app/config.py |
+| TTS 预热冷却 | 3.0s | 1.0s | interview_ws.py |
+| Hedge Racing 延迟 | 0.55s | 0.3s | backend/app/config.py |
+| 前端音频采集间隔 | 100ms | 50ms | useAudioRecorder.ts |
 
 ### 2026-04-19（优化）
 
