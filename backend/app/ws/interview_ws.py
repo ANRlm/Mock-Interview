@@ -317,8 +317,8 @@ async def interview_socket(
                     chunk = base64.b64decode(b64_audio.encode("utf-8"))
                     await runtime.audio_queue.put((chunk, incoming_rate))
                     runtime.sample_rate = incoming_rate
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("audio_chunk decode failed: %s", exc)
                 continue
 
             if msg_type == "audio_end":
@@ -457,7 +457,7 @@ async def _handle_candidate_text(
                     pcm_buffer.extend(pcm_chunk)
                     await flush_buffer(force=False)
             except Exception as exc:
-                logger.warning("TTS stream failed text_len=%s error=%s", len(tts_input), exc)
+                logger.warning("TTS preflight check failed: %s", exc, exc_info=True)
             finally:
                 await flush_buffer(force=True)
             return first_flush_sent
