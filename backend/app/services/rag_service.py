@@ -146,7 +146,7 @@ class RAGService:
         return [doc for score, doc in scored[:top_k] if score > 0] or docs[:top_k]
 
     def _load_embedder(self):
-        if self._embedder_attempted:
+        if self._embedder is not None or self._embedder_attempted:
             return self._embedder
 
         self._embedder_attempted = True
@@ -161,20 +161,24 @@ class RAGService:
             self._embedder = None
             return self._embedder
 
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Embedding device: {device}")
+
         candidates: list[tuple[str, dict[str, object]]] = []
         model_path = Path(model_ref)
         if model_path.exists():
-            candidates.append((str(model_path), {"local_files_only": True}))
+            candidates.append((str(model_path), {"local_files_only": True, "device": device}))
         else:
-            candidates.append((model_ref, {"local_files_only": False}))
+            candidates.append((model_ref, {"local_files_only": False, "device": device}))
 
         if model_ref != "BAAI/bge-small-zh-v1.5":
-            candidates.append(("BAAI/bge-small-zh-v1.5", {"local_files_only": False}))
+            candidates.append(("BAAI/bge-small-zh-v1.5", {"local_files_only": False, "device": device}))
 
         for candidate, kwargs in candidates:
             try:
                 self._embedder = SentenceTransformer(candidate, **kwargs)
-                logger.info("RAG embedding model loaded: %s", candidate)
+                logger.info("RAG embedding model loaded: %s on %s", candidate, device)
                 return self._embedder
             except Exception as exc:
                 logger.warning("Failed to load embedding model %s: %s", candidate, exc)

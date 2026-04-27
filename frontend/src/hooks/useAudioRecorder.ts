@@ -12,6 +12,7 @@ export function useAudioRecorder({ enabled = false, onChunk }: UseAudioRecorderO
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
   const animationRef = useRef<number | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
@@ -22,6 +23,7 @@ export function useAudioRecorder({ enabled = false, onChunk }: UseAudioRecorderO
       streamRef.current = stream
 
       const ctx = new AudioContext()
+      audioContextRef.current = ctx
       const source = ctx.createMediaStreamSource(stream)
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 256
@@ -70,11 +72,19 @@ export function useAudioRecorder({ enabled = false, onChunk }: UseAudioRecorderO
   const stop = useCallback(() => {
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current)
+      animationRef.current = null
     }
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop()
     }
     streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    // Close AudioContext to release hardware resources
+    if (audioContextRef.current?.state !== 'closed') {
+      audioContextRef.current?.close()
+    }
+    audioContextRef.current = null
+    analyserRef.current = null
     setIsRecording(false)
     setMicLevel(0)
   }, [])

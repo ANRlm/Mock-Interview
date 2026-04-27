@@ -1,0 +1,404 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1777108301765,
+  "projectRoot": "/home/cnhyk/Interview/mock-interview",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "scripts"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "backend": {
+      "path": "backend",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1777108301758,
+      "keyFiles": [
+        "Dockerfile",
+        "requirements.txt"
+      ]
+    },
+    "docker": {
+      "path": "docker",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1777108301759,
+      "keyFiles": []
+    },
+    "frontend": {
+      "path": "frontend",
+      "purpose": null,
+      "fileCount": 13,
+      "lastAccessed": 1777108301760,
+      "keyFiles": [
+        "eslint.config.js",
+        "index.html",
+        "package-lock.json",
+        "package.json",
+        "playwright.config.ts"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 0,
+      "lastAccessed": 1777108301761,
+      "keyFiles": []
+    },
+    "backend/app": {
+      "path": "backend/app",
+      "purpose": "Application code",
+      "fileCount": 6,
+      "lastAccessed": 1777108301762,
+      "keyFiles": [
+        "__init__.py",
+        "config.py",
+        "database.py"
+      ]
+    },
+    "frontend/dist": {
+      "path": "frontend/dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 3,
+      "lastAccessed": 1777108301763,
+      "keyFiles": [
+        "favicon.svg",
+        "icons.svg",
+        "index.html"
+      ]
+    },
+    "frontend/node_modules": {
+      "path": "frontend/node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 1,
+      "lastAccessed": 1777108301765,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "frontend/src/components/interview/InterviewRoom.tsx",
+      "accessCount": 45,
+      "lastAccessed": 1777068715572,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src",
+      "accessCount": 21,
+      "lastAccessed": 1777068429248,
+      "type": "directory"
+    },
+    {
+      "path": "backend/app/ws/interview_ws.py",
+      "accessCount": 17,
+      "lastAccessed": 1777021289310,
+      "type": "file"
+    },
+    {
+      "path": "frontend",
+      "accessCount": 13,
+      "lastAccessed": 1777026757457,
+      "type": "directory"
+    },
+    {
+      "path": "frontend/src/components/interview/ChatPanel.tsx",
+      "accessCount": 13,
+      "lastAccessed": 1777068758758,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 13,
+      "lastAccessed": 1777111591575,
+      "type": "directory"
+    },
+    {
+      "path": "frontend/src/components/ui/Button.tsx",
+      "accessCount": 10,
+      "lastAccessed": 1777068655756,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/styles/design-tokens.css",
+      "accessCount": 10,
+      "lastAccessed": 1777068900869,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ui/Card.tsx",
+      "accessCount": 9,
+      "lastAccessed": 1777068655807,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/interview/AudioPanel.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1777068804488,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/index.css",
+      "accessCount": 8,
+      "lastAccessed": 1777068905467,
+      "type": "file"
+    },
+    {
+      "path": "frontend/tailwind.config.ts",
+      "accessCount": 7,
+      "lastAccessed": 1777026787692,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/interview/AIVoiceAnimation.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1777068825621,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/interview/MessageBubble.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1777068840174,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/interview/StatusBar.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1777026785378,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/interview/TypingIndicator.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1777068579345,
+      "type": "file"
+    },
+    {
+      "path": "docker-compose.gpu.yml",
+      "accessCount": 6,
+      "lastAccessed": 1777115167016,
+      "type": "file"
+    },
+    {
+      "path": "backend",
+      "accessCount": 5,
+      "lastAccessed": 1777111637273,
+      "type": "directory"
+    },
+    {
+      "path": "backend/app/services/tts_service.py",
+      "accessCount": 4,
+      "lastAccessed": 1777018392652,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/pages/SetupPage.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1777019228536,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 3,
+      "lastAccessed": 1777018024466,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/pages/InterviewPage.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1777019526373,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/stores/interviewStore.ts",
+      "accessCount": 3,
+      "lastAccessed": 1777021265112,
+      "type": "file"
+    },
+    {
+      "path": "frontend/package.json",
+      "accessCount": 3,
+      "lastAccessed": 1777026790173,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/layout/AppShell.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1777026482490,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/services/stt_service.py",
+      "accessCount": 2,
+      "lastAccessed": 1777108559871,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/main.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017553185,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/config.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017553300,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/agents/interviewer_agent.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017561111,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/api/interview.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017561136,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/services/resume_service.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017561167,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/startup.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017561221,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/schemas.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017582801,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/api/report.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017582851,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/api/resume.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017582905,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/models/session.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017582960,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/models/report.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017613295,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/services/report_service.py",
+      "accessCount": 1,
+      "lastAccessed": 1777017613349,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/hooks/useWebSocket.ts",
+      "accessCount": 1,
+      "lastAccessed": 1777017613405,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/tests",
+      "accessCount": 1,
+      "lastAccessed": 1777018308540,
+      "type": "directory"
+    },
+    {
+      "path": "backend/app/tests/test_interview_ws_exception.py",
+      "accessCount": 1,
+      "lastAccessed": 1777018351900,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/tests/test_sensevoice_stt_exception.py",
+      "accessCount": 1,
+      "lastAccessed": 1777018351915,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/tests/test_rag_kb.py",
+      "accessCount": 1,
+      "lastAccessed": 1777018351952,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/tests/test_tts_service_exception.py",
+      "accessCount": 1,
+      "lastAccessed": 1777018352005,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/interview/PosePip.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1777023716921,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/hooks/useManualVoiceInput.ts",
+      "accessCount": 1,
+      "lastAccessed": 1777023891336,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/layout/NavBar.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1777026721784,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components",
+      "accessCount": 1,
+      "lastAccessed": 1777026735427,
+      "type": "directory"
+    },
+    {
+      "path": "frontend/src/components/ui",
+      "accessCount": 1,
+      "lastAccessed": 1777026742634,
+      "type": "directory"
+    },
+    {
+      "path": "frontend/src/components/ui/Badge.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1777026744477,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

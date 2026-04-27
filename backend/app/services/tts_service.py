@@ -18,9 +18,11 @@ import httpx
 from app.config import settings
 from app.services.tts_metrics_service import tts_metrics_service
 from app.services.tts_text_service import tts_text_normalizer
+from app.services.qwen_tts_service import qwen_tts_service
 
 
 TTS_PROVIDER_COSYVOICE2 = "cosyvoice2-http"
+_TTS_MAX_CONCURRENT_WORKERS = 3  # Existing value
 
 
 logger = logging.getLogger(__name__)
@@ -211,6 +213,11 @@ class TTSService:
         return wav_bytes, "wav", TTS_PROVIDER_COSYVOICE2
 
     async def stream_synthesize(self, text: str) -> AsyncIterator[bytes]:
+        if settings.TTS_BACKEND == "qwen3-tts":
+            async for chunk in qwen_tts_service.stream_synthesize(text):
+                yield chunk
+            return
+
         if settings.TTS_BACKEND != TTS_PROVIDER_COSYVOICE2:
             raise RuntimeError(f"Unsupported TTS backend: {settings.TTS_BACKEND}")
 

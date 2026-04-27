@@ -18,6 +18,10 @@ services:
 
   funasr:
     image: registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.12
+    network_mode: host
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
     command:
       - /bin/bash
       - -lc
@@ -48,19 +52,24 @@ services:
       - funasr_models:/workspace/models
     healthcheck:
       test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/10095'"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 25s
+      interval: 30s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
 
   cosyvoice2:
     build:
       context: ./docker/cosyvoice2-gpu
       dockerfile: Dockerfile
+    network_mode: host
     gpus: all
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
     environment:
       NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
       HF_HOME: /models/huggingface
       MODELSCOPE_CACHE: /models/modelscope
       TORCH_HOME: /models/torch
@@ -83,14 +92,23 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    network_mode: host
     gpus: all
     environment:
       NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
       OLLAMA_KEEP_ALIVE: 24h
-      OLLAMA_NUM_PARALLEL: 4
-      OLLAMA_MAX_LOADED_MODELS: 2
+      OLLAMA_NUM_PARALLEL: 16
+      OLLAMA_MAX_LOADED_MODELS: 4
       OLLAMA_GPU_OVERHEAD: "0"
+      OLLAMA_UNLIMITED_GPU: "1"
+      OLLAMA_BATCH_SIZE: "512"
+    deploy:
+      resources:
+        reservations:
+          memory: 8G
+        limits:
+          memory: 32G
     ports:
       - "11434:11434"
     volumes:
@@ -104,33 +122,9 @@ services:
 
   ollama_init:
     image: curlimages/curl:8.12.1
-    command:
-      - sh
-      - -lc
-      - |
-        set -e
-        max_retries=5
-        retry_delay=30
-        model="qwen3:8b"
-        for attempt in $(seq 1 $${max_retries}); do
-          echo "Pulling model $$model (attempt $$attempt/$$max_retries)..."
-          result=$(curl -fsS -X POST http://ollama:11434/api/pull \
-            -H "Content-Type: application/json" \
-            -d "{\"model\":\"$$model\",\"stream\":false}" \
-            2>&1)
-          if [ $$? -eq 0 ]; then
-            echo "Model $$model pulled successfully."
-            echo "$$result"
-            exit 0
-          fi
-          echo "Attempt $$attempt failed: $$result"
-          if [ $$attempt -lt $${max_retries} ]; then
-            echo "Retrying in $${retry_delay}s..."
-            sleep $${retry_delay}
-          fi
-        done
-        echo "Failed to pull model $$model after $${max_retries} attempts."
-        exit 1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["/bin/sh", "-c", "echo 'Waiting for Ollama...'; i=0; while [ $i -lt 60 ]; do curl -s http://host.docker.internal:11434/api/tags > /dev/null 2>&1 && break; i=$((i+1)); echo \"Waited $i times\"; sleep 5; done; echo 'Starting model pull...'; curl -f -X POST http://host.docker.internal:11434/api/pull -H 'Content-Type: application/json' -d '{\"model\":\"qwen3:14b\",\"stream\":false}' || echo 'Pull failed or model exists'; echo 'Done'"]
     depends_on:
       ollama:
         condition: service_healthy
@@ -140,24 +134,30 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    gpus: all
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
     environment:
-      LLM_BASE_URL: http://ollama:11434/v1
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+      CUDA_LAUNCH_BLOCKING: "0"
+      TORCH_CUDNN_V8_API_ENABLED: "1"
+      LLM_BASE_URL: http://127.0.0.1:11434/v1
       LLM_API_KEY: ollama
-      LLM_MODEL: qwen3:8b
+      LLM_MODEL: qwen3:14b
       LLM_TIMEOUT_SECONDS: 90
       LLM_DISABLE_THINKING: "true"
       LLM_DEFAULT_PROFILE: local
       LLM_RESUME_PROFILE: ""
-      LLM_RESUME_MODEL: ""
+      LLM_RESUME_MODEL: "qwen2.5:3b"
       LLM_INTERVIEW_PROFILE: ""
       LLM_INTERVIEW_MODEL: ""
       LLM_EVALUATION_PROFILE: ""
-      LLM_EVALUATION_MODEL: ""
+      LLM_EVALUATION_MODEL: "qwen3:14b"
       LLM_VERIFIER_PROFILE: ""
-      LLM_VERIFIER_MODEL: ""
+      LLM_VERIFIER_MODEL: "qwen2.5:3b"
       LLM_ROUTING_STRATEGY: balanced
       LLM_INTERVIEW_RAG_MAX_CHARS: 520
       LLM_INTERVIEW_RAG_CHUNK_MAX_CHARS: 220
@@ -168,13 +168,13 @@ services:
       CLOUD_LLM_TIMEOUT_SECONDS: 90
       CLOUD_LLM_DISABLE_THINKING: "false"
       STT_BACKEND: funasr-http
-      FUNASR_BASE_URL: http://funasr:10095
+      FUNASR_BASE_URL: http://127.0.0.1:10095
       FUNASR_HEALTH_PATH: /healthz
       FUNASR_TIMEOUT_SECONDS: 20
       FUNASR_USE_ITN: "true"
       FUNASR_EXTRA_PAYLOAD: "{}"
       TTS_BACKEND: cosyvoice2-http
-      COSYVOICE_BASE_URL: http://cosyvoice2:50000
+      COSYVOICE_BASE_URL: http://127.0.0.1:50000
       COSYVOICE_TTS_PATH: /inference_sft
       COSYVOICE_HEALTH_PATH: /openapi.json
       COSYVOICE_TIMEOUT_SECONDS: 90

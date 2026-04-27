@@ -141,6 +141,17 @@ def _infer_emotion_from_scores(
 # ---------------------------------------------------------------------------
 
 class VisionService:
+    def __init__(self) -> None:
+        self._device = "cuda" if self._check_cuda_available() else "cpu"
+        print(f"Vision service using device: {self._device}")
+
+    def _check_cuda_available(self) -> bool:
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except Exception:
+            return False
+
     async def analyze_frame(self, image_base64: str | None) -> tuple[str, float]:
         """Analyze a single video frame for emotion inference.
 

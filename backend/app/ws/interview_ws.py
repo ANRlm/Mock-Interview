@@ -9,7 +9,7 @@ import time
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, AsyncIterator
 from uuid import UUID
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -36,22 +36,23 @@ _TTS_MIN_HARD_CHARS = 3
 _TTS_SOFT_SPLIT_TRIGGER_CHARS = 12
 _TTS_FORCE_SPLIT_CHARS = 30
 _TTS_FORCE_SPLIT_AT = 18
-_TTS_EARLY_SOFT_SPLIT_TRIGGER_CHARS = 4
-_TTS_EARLY_FORCE_SPLIT_CHARS = 5
-_TTS_EARLY_FORCE_SPLIT_AT = 3
 _TTS_FIRST_PCM_FLUSH_BYTES = 96
 _TTS_PCM_FLUSH_BYTES = 12_000
 _TTS_FIRST_SEGMENT_TARGET_CHARS = 2
 _TTS_FIRST_SEGMENT_MAX_CHARS = 3
 _TTS_STREAM_SEGMENT_TARGET_CHARS = 9
 _TTS_STREAM_SEGMENT_MAX_CHARS = 16
-_TTS_FIRST_SEGMENT_TARGET_CHARS_EN = 2
-_TTS_FIRST_SEGMENT_MAX_CHARS_EN = 3
-_TTS_STREAM_SEGMENT_TARGET_CHARS_EN = 6
-_TTS_STREAM_SEGMENT_MAX_CHARS_EN = 12
 _TTS_PREWARM_SESSION_COOLDOWN_SECONDS = 3.0
 _LAST_TTS_PREWARM_AT = 0.0
-_TTS_PREFLIGHT_SAMPLE_TEXT = "好"
+_TTS_MAX_CONCURRENT_WORKERS = 3
+
+
+@dataclass
+class TurnContext:
+    turn_id: str
+    response_task: asyncio.Task[None] | None = None
+    cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
+    is_active: bool = False
 
 
 @dataclass
@@ -60,12 +61,15 @@ class SessionRuntime:
     session_id: UUID
     agent: InterviewerAgent
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    audio_buffer: bytearray = field(default_factory=bytearray)
+    # Full-duplex: audio queue instead of buffer
+    audio_queue: asyncio.Queue[tuple[bytes, int] | None] = field(default_factory=asyncio.Queue)
     sample_rate: int = 16000
-    response_task: asyncio.Task[None] | None = None
-    response_cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
-    active_response_id: str = ""
+    # Multi-turn support
+    turns: dict[str, TurnContext] = field(default_factory=dict)
+    current_turn_id: str = ""
     closed: bool = False
+    # STT worker task
+    _stt_worker_task: asyncio.Task[None] | None = None
 
     async def send_json(self, payload: dict[str, Any]) -> None:
         if self.closed:
@@ -73,35 +77,160 @@ class SessionRuntime:
         async with self.send_lock:
             await self.websocket.send_json(payload)
 
-    async def cancel_response(self, reason: str) -> None:
-        if self.response_task and not self.response_task.done():
-            self.response_cancel_event.set()
-            self.response_task.cancel()
+    async def start_stt_worker(self) -> None:
+        """Start the background STT worker coroutine."""
+        if self._stt_worker_task is None or self._stt_worker_task.done():
+            self._stt_worker_task = asyncio.create_task(self._run_stt_worker())
+
+    async def _run_stt_worker(self) -> None:
+        """Background coroutine that continuously processes audio from queue."""
+        accumulated_pcm = bytearray()
+        sample_rate = self.sample_rate
+
+        while not self.closed:
+            try:
+                item = await asyncio.wait_for(
+                    self.audio_queue.get(),
+                    timeout=0.5
+                )
+            except asyncio.TimeoutError:
+                # Check for turn cancellation periodically
+                continue
+
+            if item is None:
+                # Poison pill - audio stream ended
+                if accumulated_pcm:
+                    await self._process_stt(accumulated_pcm, sample_rate)
+                    accumulated_pcm.clear()
+                break
+
+            chunk, rate = item
+            accumulated_pcm.extend(chunk)
+            sample_rate = rate
+
+    async def _process_stt(self, pcm_bytes: bytes, sample_rate: int) -> None:
+        """Process accumulated PCM bytes through STT."""
+        if not pcm_bytes:
+            return
+
+        turn_id = self.current_turn_id
+        turn = self.turns.get(turn_id) if turn_id else None
+        if turn and turn.cancel_event.is_set():
+            return
+
+        try:
+            final_text = ""
+            async for event_type, text in stt_service.transcribe_stream_events(
+                bytes(pcm_bytes),
+                sample_rate,
+            ):
+                if turn and turn.cancel_event.is_set():
+                    return
+                if event_type == "partial":
+                    await self.send_json({"type": "stt_partial", "text": text, "turn_id": turn_id})
+                    continue
+                if event_type == "final":
+                    final_text = text
+
+            await self.send_json({"type": "stt_final", "text": final_text, "turn_id": turn_id})
+            if not final_text.strip():
+                return
+            if turn and turn.cancel_event.is_set():
+                return
+
+            # Start response for this turn
+            await self.start_response(final_text, turn_id)
+        except Exception as exc:
+            logger.exception("STT failed session=%s error=%s", self.session_id, exc)
+            await self.send_json({
+                "type": "error",
+                "code": "STT_FAILED",
+                "message": "语音识别失败",
+            })
+
+    async def cancel_turn(self, turn_id: str, reason: str) -> None:
+        """Cancel a specific turn by ID with full interrupt handling."""
+        import time
+
+        interrupt_start = time.perf_counter()
+
+        if turn_id not in self.turns:
+            return
+
+        turn = self.turns[turn_id]
+
+        # 1. Cancel STT processing immediately
+        if self._stt_worker_task and not self._stt_worker_task.done():
+            self._stt_worker_task.cancel()
             with suppress(asyncio.CancelledError):
-                await self.response_task
-            if not self.closed:
-                with suppress(RuntimeError):
-                    await self.send_json({"type": "tts_interrupted", "reason": reason})
+                await self._stt_worker_task
 
-        self.response_task = None
-        self.response_cancel_event = asyncio.Event()
-        self.active_response_id = ""
+        # 2. Cancel LLM inference via cancel event
+        turn.cancel_event.set()
 
-    async def start_response(self, text: str) -> None:
-        if self.response_task and not self.response_task.done():
-            await self.cancel_response("superseded")
-        response_id = uuid.uuid4().hex
-        self.active_response_id = response_id
-        self.response_task = asyncio.create_task(
-            _handle_candidate_text(self, text, response_id)
+        # 3. Cancel TTS streaming via cancel event
+        if turn.response_task and not turn.response_task.done():
+            turn.response_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await turn.response_task
+
+        turn.is_active = False
+
+        # 4. Send interrupt_ack to frontend
+        interrupt_latency_ms = (time.perf_counter() - interrupt_start) * 1000
+        with suppress(RuntimeError):
+            await self.send_json({
+                "type": "interrupt_ack",
+                "reason": reason,
+                "turn_id": turn_id,
+                "interrupt_latency_ms": round(interrupt_latency_ms, 2),
+            })
+
+        # Also send tts_interrupted for backward compatibility
+        with suppress(RuntimeError):
+            await self.send_json({"type": "tts_interrupted", "reason": reason, "turn_id": turn_id})
+
+        if self.current_turn_id == turn_id:
+            self.current_turn_id = ""
+
+    async def start_response(self, text: str, turn_id: str | None = None) -> None:
+        """Start a response task for given text."""
+        if turn_id is None:
+            turn_id = uuid.uuid4().hex
+
+        # Cancel any existing turn
+        if self.current_turn_id and self.current_turn_id != turn_id:
+            await self.cancel_turn(self.current_turn_id, "new_response")
+
+        # Create new turn context
+        turn = TurnContext(turn_id=turn_id, is_active=True)
+        self.turns[turn_id] = turn
+        self.current_turn_id = turn_id
+
+        turn.response_task = asyncio.create_task(
+            _handle_candidate_text(self, text, turn_id, turn.cancel_event)
         )
 
-    async def start_audio_turn(self, pcm_bytes: bytes, sample_rate: int) -> None:
-        if self.response_task and not self.response_task.done():
-            await self.cancel_response("superseded")
-        self.response_task = asyncio.create_task(
-            _handle_audio_turn(self, pcm_bytes, sample_rate)
-        )
+    async def start_audio_turn(self, pcm_bytes: bytes, sample_rate: int, turn_id: str | None = None) -> None:
+        """Start an audio transcription turn."""
+        if turn_id is None:
+            turn_id = uuid.uuid4().hex
+
+        # Cancel existing current turn
+        if self.current_turn_id:
+            await self.cancel_turn(self.current_turn_id, "new_audio_turn")
+
+        # Create turn context
+        turn = TurnContext(turn_id=turn_id, is_active=True)
+        self.turns[turn_id] = turn
+        self.current_turn_id = turn_id
+
+        # Queue audio for processing
+        await self.audio_queue.put((pcm_bytes, sample_rate))
+
+    async def end_audio_turn(self) -> None:
+        """Signal end of audio input - sends None to queue to trigger processing."""
+        await self.audio_queue.put(None)
 
 
 @router.websocket("/interview/{session_id}")
@@ -110,6 +239,9 @@ async def interview_socket(
     session_id: UUID,
     token: str | None = Query(default=None),
 ) -> None:
+    # Must accept() before any send_json/close calls per WebSocket protocol
+    await websocket.accept()
+
     if token is None:
         await websocket.send_json(
             {"type": "error", "code": "UNAUTHORIZED", "message": "Token required"}
@@ -117,38 +249,28 @@ async def interview_socket(
         await websocket.close(code=4401)
         return
 
-    payload = decode_token(token)
-    if payload is None:
+    token_payload = decode_token(token)
+    if token_payload is None:
         await websocket.send_json(
             {"type": "error", "code": "UNAUTHORIZED", "message": "Invalid or expired token"}
         )
         await websocket.close(code=4401)
         return
 
-    await websocket.accept()
-
-    user_id = payload.get("sub")
+    user_id = token_payload.get("sub")
 
     async with AsyncSessionLocal() as db:
         session = await db.get(InterviewSession, session_id)
         if session is None:
             await websocket.send_json(
-                {
-                    "type": "error",
-                    "code": "SESSION_NOT_FOUND",
-                    "message": "Session not found",
-                }
+                {"type": "error", "code": "SESSION_NOT_FOUND", "message": "Session not found"}
             )
             await websocket.close(code=4404)
             return
 
         if str(session.user_id) != user_id:
             await websocket.send_json(
-                {
-                    "type": "error",
-                    "code": "FORBIDDEN",
-                    "message": "You don't have access to this session",
-                }
+                {"type": "error", "code": "FORBIDDEN", "message": "You don't have access to this session"}
             )
             await websocket.close(code=4403)
             return
@@ -159,88 +281,69 @@ async def interview_socket(
         agent=InterviewerAgent(),
     )
 
+    # Start the STT worker
+    await runtime.start_stt_worker()
+
     try:
         while True:
             raw = await websocket.receive_text()
-            payload = json.loads(raw)
-            msg_type = payload.get("type")
+            msg_payload = json.loads(raw)
+            msg_type = msg_payload.get("type")
 
             if msg_type == "ping":
                 await runtime.send_json({"type": "pong"})
                 continue
 
             if msg_type == "interrupt":
-                await runtime.cancel_response(
-                    str(payload.get("reason") or "client_interrupt")
-                )
-                runtime.audio_buffer.clear()
+                turn_id = msg_payload.get("turn_id", runtime.current_turn_id)
+                if turn_id:
+                    await runtime.cancel_turn(turn_id, str(msg_payload.get("reason") or "client_interrupt"))
                 continue
 
             if msg_type == "candidate_message":
-                text = str(payload.get("text", "")).strip()
+                text = str(msg_payload.get("text", "")).strip()
+                turn_id = msg_payload.get("turn_id")
                 if text:
-                    await runtime.cancel_response("new_candidate_text")
-                    await runtime.start_response(text)
+                    await runtime.start_response(text, turn_id)
                 continue
 
             if msg_type == "audio_chunk":
-                b64_audio = payload.get("data")
-                incoming_rate = int(payload.get("sample_rate", runtime.sample_rate))
+                b64_audio = msg_payload.get("data")
+                incoming_rate = int(msg_payload.get("sample_rate", runtime.sample_rate))
                 if not isinstance(b64_audio, str):
-                    await runtime.send_json(
-                        {
-                            "type": "error",
-                            "code": "INVALID_AUDIO",
-                            "message": "Audio chunk missing",
-                        }
-                    )
                     continue
 
                 try:
                     chunk = base64.b64decode(b64_audio.encode("utf-8"))
-                    runtime.audio_buffer.extend(chunk)
+                    await runtime.audio_queue.put((chunk, incoming_rate))
                     runtime.sample_rate = incoming_rate
                 except Exception:
-                    await runtime.send_json(
-                        {
-                            "type": "error",
-                            "code": "INVALID_AUDIO",
-                            "message": "Audio chunk decode failed",
-                        }
-                    )
+                    pass
                 continue
 
             if msg_type == "audio_end":
-                if not runtime.audio_buffer:
-                    await runtime.send_json({"type": "stt_final", "text": ""})
-                    continue
-
-                pcm_bytes = bytes(runtime.audio_buffer)
-                runtime.audio_buffer.clear()
-
-                await runtime.start_audio_turn(pcm_bytes, runtime.sample_rate)
+                turn_id = msg_payload.get("turn_id")
+                # Signal end of audio - triggers STT processing
+                await runtime.end_audio_turn()
+                # STT worker will create turn and start response
                 continue
 
             if msg_type == "behavior_frame":
-                # Real-time behavior analysis and feedback
-                await _handle_behavior_frame(runtime, payload)
+                await _handle_behavior_frame(runtime, msg_payload)
                 continue
 
             await runtime.send_json(
-                {
-                    "type": "error",
-                    "code": "UNSUPPORTED_TYPE",
-                    "message": "Unsupported message type",
-                }
+                {"type": "error", "code": "UNSUPPORTED_TYPE", "message": "Unsupported message type"}
             )
 
     except WebSocketDisconnect:
         runtime.closed = True
-        await runtime.cancel_response("disconnect")
+        if runtime._stt_worker_task:
+            runtime._stt_worker_task.cancel()
+        _behavior_warning_last_sent.pop(str(session_id), None)
         return
     except Exception as exc:
         runtime.closed = True
-        await runtime.cancel_response("internal_error")
         with suppress(RuntimeError):
             await runtime.send_json(
                 {"type": "error", "code": "WS_INTERNAL_ERROR", "message": str(exc)}
@@ -253,9 +356,9 @@ async def _handle_candidate_text(
     runtime: SessionRuntime,
     text: str,
     response_id: str,
+    cancel_event: asyncio.Event,
 ) -> None:
     session_id = runtime.session_id
-    cancel_event = runtime.response_cancel_event
 
     global _LAST_TTS_PREWARM_AT
     now = time.perf_counter()
@@ -267,22 +370,12 @@ async def _handle_candidate_text(
     async with AsyncSessionLocal() as db:
         session = await db.get(InterviewSession, session_id)
         if session is None:
-            await runtime.send_json(
-                {
-                    "type": "error",
-                    "code": "SESSION_NOT_FOUND",
-                    "message": "Session not found",
-                }
-            )
             return
 
         existing = await db.execute(
             select(ConversationMessage)
             .where(ConversationMessage.session_id == session_id)
-            .order_by(
-                ConversationMessage.turn_index.asc(),
-                ConversationMessage.timestamp.asc(),
-            )
+            .order_by(ConversationMessage.turn_index.asc())
         )
         history = existing.scalars().all()
         turn_index = (history[-1].turn_index + 1) if history else 1
@@ -299,21 +392,19 @@ async def _handle_candidate_text(
         await db.commit()
 
     dialogue_history = [
-        {
-            "role": "assistant" if item.role == MessageRole.interviewer else "user",
-            "content": item.content,
-        }
+        {"role": "assistant" if item.role == MessageRole.interviewer else "user", "content": item.content}
         for item in history
     ]
     dialogue_history.append({"role": "user", "content": text})
 
-    tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    # Full-duplex: Multiple TTS workers for parallel sentence processing
+    tts_queue: asyncio.Queue[tuple[str, str] | None] = asyncio.Queue()
     tts_start = time.perf_counter()
     first_audio_latency_ref: list[float | None] = [None]
     tts_chunks = 0
     tts_bytes = 0
 
-    async def _tts_worker() -> None:
+    async def _tts_worker(worker_id: int) -> None:
         nonlocal tts_chunks, tts_bytes
 
         async def _emit_tts_text(tts_input: str) -> bool:
@@ -322,18 +413,11 @@ async def _handle_candidate_text(
             first_flush_sent = False
             first_audio_sent = False
 
-            # Preflight removed - _warm_if_needed in _stream_sentence handles warmup
-            # This was adding unnecessary latency by blocking before real TTS
-
             async def flush_buffer(force: bool = False) -> None:
                 nonlocal first_flush_sent, first_audio_sent, tts_chunks, tts_bytes
                 if not pcm_buffer:
                     return
-                threshold = (
-                    _TTS_FIRST_PCM_FLUSH_BYTES
-                    if not first_flush_sent
-                    else _TTS_PCM_FLUSH_BYTES
-                )
+                threshold = _TTS_FIRST_PCM_FLUSH_BYTES if not first_flush_sent else _TTS_PCM_FLUSH_BYTES
                 if not force and len(pcm_buffer) < threshold:
                     return
 
@@ -350,54 +434,41 @@ async def _handle_candidate_text(
 
                 if not first_audio_sent:
                     first_audio_sent = True
-                    logger.info(
-                        "TTS first audio sent session=%s response_id=%s text_len=%s latency=%.3fs",
-                        session_id,
-                        response_id,
-                        len(tts_input),
-                        time.perf_counter() - tts_start,
-                    )
                     if first_audio_latency_ref[0] is None:
                         first_audio_latency_ref[0] = time.perf_counter() - tts_start
 
-                if runtime.active_response_id != response_id:
+                if runtime.current_turn_id != response_id:
                     return
 
-                await runtime.send_json(
-                    {
-                        "type": "tts_audio",
-                        "data": base64.b64encode(pcm_bytes).decode("utf-8"),
-                        "format": "pcm_s16le",
-                        "sample_rate": settings.COSYVOICE_SAMPLE_RATE,
-                        "provider": "cosyvoice2-http",
-                        "response_id": response_id,
-                    }
-                )
+                await runtime.send_json({
+                    "type": "tts_audio",
+                    "data": base64.b64encode(pcm_bytes).decode("utf-8"),
+                    "format": "pcm_s16le",
+                    "sample_rate": settings.COSYVOICE_SAMPLE_RATE,
+                    "provider": "cosyvoice2-http",
+                    "response_id": response_id,
+                    "turn_id": response_id,
+                })
 
             try:
                 async for pcm_chunk in tts_service.stream_synthesize(tts_input):
-                    if cancel_event.is_set() or runtime.active_response_id != response_id:
+                    if cancel_event.is_set() or runtime.current_turn_id != response_id:
                         break
                     pcm_buffer.extend(pcm_chunk)
                     await flush_buffer(force=False)
             except Exception as exc:
-                logger.warning(
-                    "TTS preflight check failed session=%s text_len=%s error=%s",
-                    session_id,
-                    len(tts_input),
-                    exc,
-                    exc_info=True,
-                )
+                logger.warning("TTS stream failed text_len=%s error=%s", len(tts_input), exc)
             finally:
                 await flush_buffer(force=True)
             return first_flush_sent
 
         while True:
-            sentence = await tts_queue.get()
-            if sentence is None:
+            item = await tts_queue.get()
+            if item is None:
                 tts_queue.task_done()
                 break
 
+            sentence, seg_id = item
             if cancel_event.is_set():
                 tts_queue.task_done()
                 continue
@@ -412,28 +483,20 @@ async def _handle_candidate_text(
                 try:
                     await _emit_tts_text(tts_input)
                 except Exception as exc:
-                    logger.warning(
-                        "TTS stream failed session=%s text_len=%s error=%s",
-                        session_id,
-                        len(tts_input),
-                        exc,
-                    )
+                    logger.warning("TTS emit failed text_len=%s error=%s", len(tts_input), exc)
             tts_queue.task_done()
 
-    tts_worker_task = asyncio.create_task(_tts_worker())
+    # Start multiple TTS workers for parallel processing
+    num_workers = min(_TTS_MAX_CONCURRENT_WORKERS, 3)
+    tts_workers = [asyncio.create_task(_tts_worker(i)) for i in range(num_workers)]
+
     queued_sentence_count = 0
-    pending_tts_buffer = ""
-    verifier = None
 
-    async def _enqueue_tts_sentence(sentence: str) -> None:
+    async def _enqueue_tts_sentence(sentence: str, seg_id: str) -> None:
         nonlocal queued_sentence_count
-
-        segments = _split_sentence_for_tts(
-            sentence,
-            first_segment=(queued_sentence_count == 0),
-        )
+        segments = _split_sentence_for_tts(sentence, first_segment=(queued_sentence_count == 0))
         for segment in segments:
-            await tts_queue.put(segment)
+            await tts_queue.put((segment, f"{seg_id}_{queued_sentence_count}"))
             queued_sentence_count += 1
 
     try:
@@ -441,6 +504,8 @@ async def _handle_candidate_text(
         first_llm_token_at: float | None = None
         llm_token_chars = 0
         full_text = ""
+        sentence_buffer = ""
+        seg_counter = 0
 
         try:
             async for token in runtime.agent.stream_next_question(
@@ -455,46 +520,35 @@ async def _handle_candidate_text(
                     first_llm_token_at = time.perf_counter()
                 llm_token_chars += len(token)
                 full_text += token
-                await runtime.send_json(
-                    {"type": "llm_token", "token": token, "response_id": response_id}
-                )
 
-                pending_tts_buffer += token
-                ready_sentences, pending_tts_buffer = _drain_tts_ready_sentences(
-                    pending_tts_buffer,
-                    aggressive=(queued_sentence_count == 0),
-                )
-                for sentence in ready_sentences:
-                    await _enqueue_tts_sentence(sentence)
+                await runtime.send_json({
+                    "type": "llm_token",
+                    "token": token,
+                    "response_id": response_id,
+                    "turn_id": response_id,
+                })
+
+                # Stream to TTS immediately without waiting for sentence boundaries
+                # This is the key optimization for low-latency first audio
+                pending_chunk = token.strip()
+                if pending_chunk:
+                    seg_counter += 1
+                    await _enqueue_tts_sentence(pending_chunk, f"seg_{seg_counter}")
+
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.exception("LLM stream failed session=%s error=%s", session_id, exc)
             if not full_text.strip() and not cancel_event.is_set():
                 full_text = "请继续。"
-                llm_token_chars = len(full_text)
-                await runtime.send_json(
-                    {
-                        "type": "llm_token",
-                        "token": full_text,
-                        "response_id": response_id,
-                    }
-                )
-                pending_tts_buffer += full_text
-                ready_sentences, pending_tts_buffer = _drain_tts_ready_sentences(
-                    pending_tts_buffer,
-                    aggressive=(queued_sentence_count == 0),
-                )
-                for sentence in ready_sentences:
-                    await _enqueue_tts_sentence(sentence)
+                seg_counter += 1
+                await _enqueue_tts_sentence(full_text, f"seg_{seg_counter}")
 
         if cancel_event.is_set():
             return
 
         llm_total_elapsed = time.perf_counter() - llm_start
-        llm_first_token_latency = (
-            (first_llm_token_at - llm_start) if first_llm_token_at is not None else None
-        )
+        llm_first_token_latency = (first_llm_token_at - llm_start) if first_llm_token_at is not None else None
         agent_stats = runtime.agent.pop_last_stream_stats()
         llm_stats_payload = _build_llm_stats_payload(
             raw_stats=agent_stats,
@@ -505,15 +559,6 @@ async def _handle_candidate_text(
         )
 
         llm_text = full_text.strip() or "请继续。"
-        if runtime.active_response_id != response_id:
-            return
-        tail_sentence = pending_tts_buffer.strip()
-        if tail_sentence and len(tail_sentence) < 2 and queued_sentence_count > 0:
-            tail_sentence = ""
-        if tail_sentence:
-            await _enqueue_tts_sentence(tail_sentence)
-        if queued_sentence_count == 0:
-            await _enqueue_tts_sentence(llm_text)
 
         async with AsyncSessionLocal() as db:
             interviewer_msg = ConversationMessage(
@@ -525,106 +570,46 @@ async def _handle_candidate_text(
             db.add(interviewer_msg)
             await db.commit()
 
-        await runtime.send_json(
-            {
-                "type": "llm_done",
-                "full_text": llm_text,
-                "turn_index": turn_index,
-                "response_id": response_id,
-            }
-        )
+        await runtime.send_json({
+            "type": "llm_done",
+            "full_text": llm_text,
+            "turn_index": turn_index,
+            "response_id": response_id,
+            "turn_id": response_id,
+        })
         await runtime.send_json({"type": "llm_stats", **llm_stats_payload})
 
+        # Signal end of TTS generation
         await tts_queue.join()
         await tts_queue.put(None)
-        await tts_worker_task
+        for w in tts_workers:
+            await w
 
-        logger.info(
-            "TTS completed session=%s chunks=%s bytes=%s total=%.3fs",
-            session_id,
-            tts_chunks,
-            tts_bytes,
-            time.perf_counter() - tts_start,
-        )
+        logger.info("TTS completed session=%s chunks=%s bytes=%s total=%.3fs",
+                    session_id, tts_chunks, tts_bytes, time.perf_counter() - tts_start)
 
-        tts_metrics_service.record(
-            {
-                "session_id": str(session_id),
-                "response_id": response_id,
-                "tts_first_audio_seconds": first_audio_latency_ref[0],
-                "tts_chunks": tts_chunks,
-                "tts_bytes": tts_bytes,
-                "llm_generated_chars": llm_token_chars,
-                "tts_success": tts_chunks > 0,
-            }
-        )
+        tts_metrics_service.record({
+            "session_id": str(session_id),
+            "response_id": response_id,
+            "tts_first_audio_seconds": first_audio_latency_ref[0],
+            "tts_chunks": tts_chunks,
+            "tts_bytes": tts_bytes,
+            "llm_generated_chars": llm_token_chars,
+            "tts_success": tts_chunks > 0,
+        })
 
-        if not cancel_event.is_set() and runtime.active_response_id == response_id:
-            await runtime.send_json({"type": "tts_done", "response_id": response_id})
+        if not cancel_event.is_set() and runtime.current_turn_id == response_id:
+            await runtime.send_json({"type": "tts_done", "response_id": response_id, "turn_id": response_id})
+
     except asyncio.CancelledError:
         raise
     finally:
-        if not tts_worker_task.done():
-            await tts_queue.put(None)
-            tts_worker_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await tts_worker_task
-
-
-async def _handle_audio_turn(
-    runtime: SessionRuntime,
-    pcm_bytes: bytes,
-    sample_rate: int,
-) -> None:
-    session_id = runtime.session_id
-
-    try:
-        final_text = ""
-        async for event_type, text in stt_service.transcribe_stream_events(
-            pcm_bytes,
-            sample_rate,
-        ):
-            if runtime.response_cancel_event.is_set():
-                return
-
-            if event_type == "partial":
-                await runtime.send_json({"type": "stt_partial", "text": text})
-                continue
-
-            if event_type == "final":
-                final_text = text
-
-        await runtime.send_json({"type": "stt_final", "text": final_text})
-        if not final_text.strip() or runtime.response_cancel_event.is_set():
-            return
-
-        await runtime.start_response(final_text)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        logger.exception("STT failed session=%s error=%s", session_id, exc)
-        await runtime.send_json(
-            {
-                "type": "error",
-                "code": "STT_FAILED",
-                "message": "语音识别失败，请检查 FunASR 服务。",
-            }
-        )
-
-
-def _as_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _ns_to_seconds(value: int | None) -> float | None:
-    if value is None or value <= 0:
-        return None
-    return value / 1_000_000_000
+        for w in tts_workers:
+            if not w.done():
+                await tts_queue.put(None)
+                w.cancel()
+                with suppress(asyncio.CancelledError):
+                    await w
 
 
 def _build_llm_stats_payload(
@@ -635,6 +620,19 @@ def _build_llm_stats_payload(
     generated_chars: int,
     backend: str,
 ) -> dict[str, Any]:
+    def _as_int(value: Any) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _ns_to_seconds(value: int | None) -> float | None:
+        if value is None or value <= 0:
+            return None
+        return value / 1_000_000_000
+
     prompt_eval_count = _as_int(raw_stats.get("prompt_eval_count"))
     eval_count = _as_int(raw_stats.get("eval_count"))
     prompt_eval_seconds = _ns_to_seconds(_as_int(raw_stats.get("prompt_eval_duration")))
@@ -646,95 +644,33 @@ def _build_llm_stats_payload(
     if eval_count is not None and eval_seconds is not None and eval_seconds > 0:
         generated_tps = eval_count / eval_seconds
 
-    payload: dict[str, Any] = {
-        "backend": backend,
-        "generated_chars": generated_chars,
-        "first_token_seconds": round(first_token_seconds, 3)
-        if first_token_seconds is not None
-        else None,
-        "total_seconds": round(total_seconds, 3),
-        "done_reason": raw_stats.get("done_reason"),
-        "prompt_tokens": prompt_eval_count,
-        "generated_tokens": eval_count,
-        "prompt_eval_seconds": round(prompt_eval_seconds, 3)
-        if prompt_eval_seconds is not None
-        else None,
-        "generation_seconds": round(eval_seconds, 3)
-        if eval_seconds is not None
-        else None,
-        "tokens_per_second": round(generated_tps, 2)
-        if generated_tps is not None
-        else None,
-        "load_seconds": round(load_seconds, 3) if load_seconds is not None else None,
-        "provider_total_seconds": round(total_duration_seconds, 3)
-        if total_duration_seconds is not None
-        else None,
+    return {
+        key: value
+        for key, value in {
+            "backend": backend,
+            "generated_chars": generated_chars,
+            "first_token_seconds": round(first_token_seconds, 3) if first_token_seconds is not None else None,
+            "total_seconds": round(total_seconds, 3),
+            "done_reason": raw_stats.get("done_reason"),
+            "prompt_tokens": prompt_eval_count,
+            "generated_tokens": eval_count,
+            "prompt_eval_seconds": round(prompt_eval_seconds, 3) if prompt_eval_seconds is not None else None,
+            "generation_seconds": round(eval_seconds, 3) if eval_seconds is not None else None,
+            "tokens_per_second": round(generated_tps, 2) if generated_tps is not None else None,
+            "load_seconds": round(load_seconds, 3) if load_seconds is not None else None,
+            "provider_total_seconds": round(total_duration_seconds, 3) if total_duration_seconds is not None else None,
+        }.items()
+        if value is not None
     }
-
-    return {key: value for key, value in payload.items() if value is not None}
 
 
 def _resolve_llm_backend_label(agent: InterviewerAgent) -> str:
     if agent.using_ollama_native:
         return "ollama-native"
-
     profile_name = getattr(agent, "active_profile_name", "")
     if profile_name == "cloud":
         return "cloud-openai-compatible"
-
     return "openai-compatible"
-
-
-def _drain_tts_ready_sentences(
-    buffer: str,
-    *,
-    aggressive: bool = False,  # Balanced for quality and speed
-) -> tuple[list[str], str]:
-    ready: list[str] = []
-    start = 0
-    # Balanced settings for quality and speed
-    soft_trigger = 6 if aggressive else 12
-    force_trigger = 8 if aggressive else 20
-    force_at = 4 if aggressive else 15
-
-    for idx, char in enumerate(buffer):
-        if char not in _TTS_END_MARKERS:
-            continue
-
-        candidate = buffer[start : idx + 1].strip()
-        if candidate and len(candidate) >= _TTS_MIN_HARD_CHARS:
-            ready.append(candidate)
-            start = idx + 1
-            continue
-
-        if candidate:
-            continue
-
-        start = idx + 1
-
-    rest = buffer[start:]
-
-    if not ready:
-        rest_stripped = rest.strip()
-        if len(rest_stripped) >= soft_trigger:
-            split_pos = -1
-            for idx in range(len(rest) - 1, -1, -1):
-                if rest[idx] in _TTS_SOFT_SPLIT_MARKERS:
-                    split_pos = idx
-                    break
-
-            if split_pos >= _TTS_MIN_HARD_CHARS:
-                candidate = rest[: split_pos + 1].strip()
-                if candidate:
-                    ready.append(candidate)
-                rest = rest[split_pos + 1 :]
-            elif len(rest_stripped) >= force_trigger:
-                candidate = rest[:force_at].strip()
-                if candidate:
-                    ready.append(candidate)
-                rest = rest[force_at:]
-
-    return ready, rest
 
 
 def _split_sentence_for_tts(sentence: str, *, first_segment: bool) -> list[str]:
@@ -744,37 +680,17 @@ def _split_sentence_for_tts(sentence: str, *, first_segment: bool) -> list[str]:
 
     has_en = any(("A" <= ch <= "Z") or ("a" <= ch <= "z") for ch in text)
 
-    target_chars = (
-        (
-            _TTS_FIRST_SEGMENT_TARGET_CHARS_EN
-            if first_segment
-            else _TTS_STREAM_SEGMENT_TARGET_CHARS_EN
-        )
-        if has_en
-        else (
-            _TTS_FIRST_SEGMENT_TARGET_CHARS
-            if first_segment
-            else _TTS_STREAM_SEGMENT_TARGET_CHARS
-        )
-    )
-    max_chars = (
-        (
-            _TTS_FIRST_SEGMENT_MAX_CHARS_EN
-            if first_segment
-            else _TTS_STREAM_SEGMENT_MAX_CHARS_EN
-        )
-        if has_en
-        else (
-            _TTS_FIRST_SEGMENT_MAX_CHARS
-            if first_segment
-            else _TTS_STREAM_SEGMENT_MAX_CHARS
-        )
-    )
+    if first_segment:
+        target_chars = _TTS_FIRST_SEGMENT_MAX_CHARS_EN if has_en else _TTS_FIRST_SEGMENT_MAX_CHARS
+        max_chars = _TTS_FIRST_SEGMENT_MAX_CHARS_EN if has_en else _TTS_FIRST_SEGMENT_MAX_CHARS
+    else:
+        target_chars = _TTS_STREAM_SEGMENT_MAX_CHARS_EN if has_en else _TTS_STREAM_SEGMENT_MAX_CHARS
+        max_chars = _TTS_STREAM_SEGMENT_MAX_CHARS_EN if has_en else _TTS_STREAM_SEGMENT_MAX_CHARS
 
     if len(text) <= max_chars:
         return [text]
 
-    segments: list[str] = []
+    segments = []
     buffer = text
     while buffer:
         if len(buffer) <= max_chars:
@@ -784,20 +700,17 @@ def _split_sentence_for_tts(sentence: str, *, first_segment: bool) -> list[str]:
         split_pos = -1
         search_end = min(len(buffer), max_chars)
         for idx in range(search_end - 1, target_chars - 2, -1):
-            if (
-                buffer[idx] in _TTS_SOFT_SPLIT_MARKERS
-                or buffer[idx] in _TTS_END_MARKERS
-            ):
+            if buffer[idx] in _TTS_SOFT_SPLIT_MARKERS or buffer[idx] in _TTS_END_MARKERS:
                 split_pos = idx
                 break
 
         if split_pos < 0:
             split_pos = max_chars - 1
 
-        part = buffer[: split_pos + 1].strip()
+        part = buffer[:split_pos + 1].strip()
         if part:
             segments.append(part)
-        buffer = buffer[split_pos + 1 :].strip()
+        buffer = buffer[split_pos + 1:].strip()
 
     return [seg for seg in segments if seg]
 
@@ -806,11 +719,7 @@ _BEHAVIOR_WARNING_COOLDOWN = 10.0
 _behavior_warning_last_sent: dict[str, float] = {}
 
 
-async def _handle_behavior_frame(
-    runtime: SessionRuntime,
-    payload: dict[str, Any],
-) -> None:
-    """Handle real-time behavior frame from frontend MediaPipe analysis."""
+async def _handle_behavior_frame(runtime: SessionRuntime, payload: dict[str, Any]) -> None:
     session_id = runtime.session_id
 
     try:
@@ -821,10 +730,8 @@ async def _handle_behavior_frame(
         gaze_y = payload.get("gaze_y")
         image_b64 = payload.get("image_base64")
 
-        # Analyze emotion from frame
         emotion, confidence = await vision_service.analyze_frame(image_b64)
 
-        # Persist to DB
         async with AsyncSessionLocal() as db:
             item = BehaviorLog(
                 session_id=session_id,
@@ -839,8 +746,7 @@ async def _handle_behavior_frame(
             db.add(item)
             await db.commit()
 
-        # Send real-time feedback if scores are low
-        warnings: list[str] = []
+        warnings = []
         if eye_contact < 0.45:
             warnings.append("视线偏离镜头，请适当回归")
         if head_pose < 0.50:
@@ -854,9 +760,9 @@ async def _handle_behavior_frame(
 
         if warnings:
             now = time.time()
-            last_sent = _behavior_warning_last_sent.get(session_id, 0)
+            last_sent = _behavior_warning_last_sent.get(str(session_id), 0)
             if now - last_sent >= _BEHAVIOR_WARNING_COOLDOWN:
-                _behavior_warning_last_sent[session_id] = now
+                _behavior_warning_last_sent[str(session_id)] = now
                 await runtime.send_json({
                     "type": "behavior_warning",
                     "warnings": warnings,

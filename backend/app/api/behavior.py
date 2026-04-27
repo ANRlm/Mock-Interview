@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
+from app.api.interview import _assert_session_owner
 from app.core.limiter import rate_limiter as limiter
 from app.database import AsyncSessionLocal, get_db
 from app.models.behavior_log import BehaviorLog
@@ -25,11 +26,10 @@ async def post_behavior(
     session_id: UUID,
     payload: BehaviorBatchInput,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
 
     frames = payload.frames
 

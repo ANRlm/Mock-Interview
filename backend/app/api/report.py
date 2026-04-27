@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
+from app.api.interview import _assert_session_owner
 from app.database import get_db
 from app.models.report import InterviewReport
 from app.models.session import InterviewSession
@@ -26,11 +27,10 @@ router = APIRouter(prefix="/sessions", tags=["report"])
 async def generate_report(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ReportGenerateResponse:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
 
     pending_status = await trigger_report_generation(session_id)
     return ReportGenerateResponse(status=pending_status, session_id=session_id)
@@ -40,11 +40,10 @@ async def generate_report(
 async def get_report(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ReportRead | JSONResponse:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
 
     report = await db.scalar(
         select(InterviewReport).where(InterviewReport.session_id == session_id)

@@ -17,10 +17,13 @@ from app.api.llm_config import router as llm_config_router
 from app.api.report import router as report_router
 from app.api.resume import router as resume_router
 from app.api.tts_metrics import router as tts_metrics_router
+from app.api.transcribe import router as transcribe_router
 from app.config import settings
 from app.database import init_db
 from app.startup import run_startup_tasks
 from app.ws.interview_ws import router as interview_ws_router
+from app.ws.stt_ws import router as stt_ws_router
+from app.ws.tts_ws import router as tts_ws_router
 
 
 
@@ -60,8 +63,14 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     # Prevent MIME sniffing
     response.headers["X-Content-Type-Options"] = "nosniff"
-    # XSS protection
+    # XSS protection (legacy browsers)
     response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Referrer policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Content Security Policy – tightened for API-only backend
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; frame-ancestors 'none'"
+    )
     return response
 
 
@@ -72,4 +81,7 @@ app.include_router(report_router, prefix=settings.API_V1_PREFIX)
 app.include_router(behavior_router, prefix=settings.API_V1_PREFIX)
 app.include_router(llm_config_router, prefix=settings.API_V1_PREFIX)
 app.include_router(tts_metrics_router, prefix=settings.API_V1_PREFIX)
+app.include_router(transcribe_router, prefix=settings.API_V1_PREFIX)
 app.include_router(interview_ws_router, prefix="/ws")
+app.include_router(stt_ws_router, prefix="/ws")
+app.include_router(tts_ws_router, prefix="/ws")

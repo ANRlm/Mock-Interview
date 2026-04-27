@@ -1,5 +1,5 @@
 import { Mic, MicOff, Send, AlertCircle, Loader2, Mic2, Wifi, WifiOff } from 'lucide-react'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useInterviewStore, type Message } from '@/stores/interviewStore'
@@ -36,7 +36,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
   const [manualVoiceActive, setManualVoiceActive] = useState(false)
   const [micPermission, setMicPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
   const [requestingMic, setRequestingMic] = useState(false)
-  const currentResponseIdRef = { current: '' }
+  const currentResponseIdRef = useRef('')
 
   const {
     setSession,
@@ -152,7 +152,8 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
       .then(setSession)
       .catch(() => navigate('/'))
     getMessages(sessionId).then((msgs) => setMessages(msgs as Message[])).catch(() => {})
-  }, [sessionId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]) // navigate/setSession/setMessages are stable references; sessionId triggers re-fetch
 
   useEffect(() => {
     if (inputMode !== 'voice') return

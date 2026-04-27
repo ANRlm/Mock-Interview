@@ -107,7 +107,15 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
   }, [])
 
   const sendAudioChunk = useCallback((chunk: ArrayBuffer, sampleRate: number) => {
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(chunk)))
+    // btoa(String.fromCharCode(...new Uint8Array(chunk))) overflows the JS call
+    // stack for large audio buffers. Use a chunked approach instead.
+    const bytes = new Uint8Array(chunk)
+    let binary = ''
+    const CHUNK = 8192
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+    }
+    const base64 = btoa(binary)
     return send({ type: 'audio_chunk', data: base64, sample_rate: sampleRate })
   }, [send])
 

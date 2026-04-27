@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import audioop
 import io
 import logging
 import wave
@@ -9,7 +8,7 @@ from collections.abc import AsyncIterator
 import httpx
 
 from app.config import settings
-
+from app.services.audio_utils import resample_pcm_s16le as _resample_pcm_s16le
 
 logger = logging.getLogger(__name__)
 
@@ -148,14 +147,7 @@ class SenseVoiceSTTService:
             return pcm
 
         try:
-            converted, _ = audioop.ratecv(
-                pcm,
-                2,
-                1,
-                source_rate,
-                target_rate,
-                None,
-            )
+            converted = _resample_pcm_s16le(pcm, source_rate, target_rate)
             logger.info(
                 "Resampled PCM from %sHz to %sHz (%s -> %s bytes)",
                 source_rate,

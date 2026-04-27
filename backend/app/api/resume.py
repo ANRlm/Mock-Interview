@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.resume_agent import ResumeAgent
 from app.api.dependencies import get_current_user
+from app.api.interview import _assert_session_owner
 from app.config import settings
 from app.database import get_db
 from app.models.session import InterviewSession
@@ -29,11 +30,10 @@ async def upload_resume(
     session_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
 
     suffix = Path(file.filename or "resume.pdf").suffix.lower()
     if suffix not in {".pdf", ".txt", ".md", ".docx", ".doc"}:
@@ -70,11 +70,10 @@ async def upload_resume(
 async def get_resume(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
     return session.resume_parsed or {"status": "empty"}
 
 

@@ -21,7 +21,7 @@ export function useTTSPlayer({ onQueueEmpty }: UseTTSPlayerOptions = {}) {
     }
 
     playingRef.current = true
-    const { data } = queueRef.current.shift()!
+    const { data, format, sampleRate } = queueRef.current.shift()!
     setQueueSize(queueRef.current.length)
 
     if (!audioContextRef.current) {
@@ -36,24 +36,44 @@ export function useTTSPlayer({ onQueueEmpty }: UseTTSPlayerOptions = {}) {
         bytes[i] = binaryString.charCodeAt(i)
       }
 
-      ctx.decodeAudioData(bytes.buffer, (buffer) => {
-        const source = ctx.createBufferSource()
-        source.buffer = buffer
-        source.connect(ctx.destination)
-        source.onended = () => {
+      // Backend sends raw PCM (pcm_s16le); decodeAudioData only handles encoded
+      // audio (WAV/MP3/OGG). For pcm_s16le we must build the AudioBuffer manually.
+      if (format === 'pcm_s16le' || format === 'pcm') {
+        const int16 = new Int16Array(bytes.buffer)
+        if (int16.length === 0) {
           playNext()
+          return
         }
+        const float32 = new Float32Array(int16.length)
+        for (let i = 0; i < int16.length; i++) {
+          float32[i] = int16[i] / 32768.0
+        }
+        const audioBuffer = ctx.createBuffer(1, float32.length, sampleRate)
+        audioBuffer.copyToChannel(float32, 0)
+        const source = ctx.createBufferSource()
+        source.buffer = audioBuffer
+        source.connect(ctx.destination)
+        source.onended = () => playNext()
         source.start()
-      }, () => {
-        playNext()
-      })
+      } else {
+        // For encoded formats (wav/mp3) use decodeAudioData
+        ctx.decodeAudioData(bytes.buffer, (buffer) => {
+          const source = ctx.createBufferSource()
+          source.buffer = buffer
+          source.connect(ctx.destination)
+          source.onended = () => playNext()
+          source.start()
+        }, () => {
+          playNext()
+        })
+      }
     } catch {
       playNext()
     }
   }, [onQueueEmpty])
 
-  const enqueueBase64 = useCallback((data: string, format: string, _sampleRate: number) => {
-    queueRef.current.push({ data, format, sampleRate: _sampleRate })
+  const enqueueBase64 = useCallback((data: string, format: string, sampleRate: number) => {
+    queueRef.current.push({ data, format, sampleRate })
     setQueueSize(queueRef.current.length)
     if (!playingRef.current) {
       setPlaying(true)

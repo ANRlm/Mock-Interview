@@ -44,7 +44,9 @@ async def stt_socket(
     session_id: UUID,
     token: str | None = Query(default=None),
 ) -> None:
-    # JWT Authentication
+    # Must accept() before any send_json/close calls per WebSocket protocol
+    await websocket.accept()
+
     if token is None:
         await websocket.send_json(
             {"type": "error", "code": "UNAUTHORIZED", "message": "Token required"}
@@ -52,16 +54,15 @@ async def stt_socket(
         await websocket.close(code=4401)
         return
 
-    payload = decode_token(token)
-    if payload is None:
+    token_payload = decode_token(token)
+    if token_payload is None:
         await websocket.send_json(
             {"type": "error", "code": "UNAUTHORIZED", "message": "Invalid or expired token"}
         )
         await websocket.close(code=4401)
         return
 
-    await websocket.accept()
-    user_id = payload.get("sub")
+    user_id = token_payload.get("sub")
 
     # Session ownership validation
     async with AsyncSessionLocal() as db:

@@ -359,6 +359,18 @@ async def main() -> None:
     parser.add_argument("--email", default=os.getenv("SMOKE_EMAIL", "smoketest@example.com"))
     parser.add_argument("--password", default=os.getenv("SMOKE_PASSWORD", "smoketest123"))
     parser.add_argument("--register", action="store_true", help="Register the test user if not exists")
+    parser.add_argument(
+        "--tts-backend",
+        default=os.getenv("TTS_BACKEND", "cosyvoice"),
+        choices=["cosyvoice", "qwen3-tts"],
+        help="TTS backend to use (default: cosyvoice)",
+    )
+    parser.add_argument(
+        "--stt-backend",
+        default=os.getenv("STT_BACKEND", "sensevoice"),
+        choices=["sensevoice", "paraformer-streaming"],
+        help="STT backend to use (default: sensevoice)",
+    )
     args = parser.parse_args()
 
     _disable_local_proxy_env()
@@ -443,6 +455,8 @@ async def main() -> None:
             "report_total_score": report.get("total_score"),
             "report_generated_at": report.get("generated_at"),
             "tts_first_chunk_wav": wav_saved,
+            "tts_backend": args.tts_backend,
+            "stt_backend": args.stt_backend,
         }
 
         result_path = artifact_dir / f"{session_id}_result.json"
@@ -471,6 +485,8 @@ async def main() -> None:
         "failed_runs": failed_runs,
         "failed_count": len(failed_runs),
         "sessions": [item["session_id"] for item in outputs],
+        "tts_backend": args.tts_backend,
+        "stt_backend": args.stt_backend,
     }
     if latencies:
         sorted_vals = sorted(latencies)

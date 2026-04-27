@@ -37,15 +37,23 @@ async def create_session(
     return SessionRead.model_validate(session, from_attributes=True)
 
 
+def _assert_session_owner(session: InterviewSession | None, current_user: User) -> InterviewSession:
+    """Raise 404 if session doesn't exist, 403 if it doesn't belong to current user."""
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return session
+
+
 @router.get("/{session_id}", response_model=SessionRead)
 async def get_session(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionRead:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
     return SessionRead.model_validate(session, from_attributes=True)
 
 
@@ -54,11 +62,10 @@ async def update_session(
     session_id: UUID,
     payload: SessionUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionRead:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
 
     now = datetime.now(timezone.utc)
     session.status = payload.status
@@ -76,11 +83,10 @@ async def update_session(
 async def get_messages(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[MessageRead]:
     session = await db.get(InterviewSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _assert_session_owner(session, current_user)
 
     result = await db.execute(
         select(ConversationMessage)

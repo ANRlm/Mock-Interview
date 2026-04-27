@@ -1,0 +1,1826 @@
+From e204e80bfb83ec1dd35109b4b114904d182191dc Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Mon, 27 Apr 2026 11:29:10 +0000
+Subject: [PATCH 1/3] =?UTF-8?q?fix:=20resolve=209=20bugs=20=E2=80=94=20PCM?=
+ =?UTF-8?q?=20audio,=20WS=20accept=20order,=20useRef,=20IDOR,=20memory=20l?=
+ =?UTF-8?q?eaks,=20AudioContext,=20audioop=20deprecation?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Critical:
+- useTTSPlayer: replace decodeAudioData with manual PCM→Float32 AudioBuffer construction
+  (decodeAudioData only accepts encoded audio; pcm_s16le raw data was silently rejected,
+   meaning TTS audio never played in the browser)
+- interview_ws: move websocket.accept() before auth checks; send_json before accept
+  throws RuntimeError in Starlette
+- InterviewRoom: change currentResponseIdRef plain object to useRef (was recreated
+  on every render, losing response ID and breaking deduplication)
+
+Security:
+- interview.py/report.py/resume.py/behavior.py: add _assert_session_owner() check to
+  all 8 session endpoints (IDOR — any authenticated user could access any session)
+- auth.py: add periodic cleanup to _loginAttempts dict (unbounded memory growth)
+
+Quality:
+- interview_ws.py: rename inner 'payload' to 'msg_payload' to eliminate variable shadowing
+- interview_ws.py: use str(session_id) key consistently in _behavior_warning_last_sent;
+  clean up entry on WebSocketDisconnect to prevent memory leak
+- useAudioRecorder: store AudioContext in ref and close it in stop() to release audio hardware
+- report_service.py: extract _apply_report_fields() helper, eliminating ~50 duplicate lines
+- sensevoice_stt_service.py: replace deprecated audioop.ratecv with pure-Python linear
+  resampler (_resample_pcm_s16le) — audioop removed in Python 3.13
+- main.py: add Content-Security-Policy and Referrer-Policy security headers
+---
+ backend/app/api/auth.py                       |  14 +-
+ backend/app/api/behavior.py                   |   6 +-
+ backend/app/api/interview.py                  |  24 ++--
+ backend/app/api/report.py                     |  11 +-
+ backend/app/api/resume.py                     |  11 +-
+ backend/app/main.py                           |   8 +-
+ backend/app/services/report_service.py        | 131 +++++++++---------
+ .../app/services/sensevoice_stt_service.py    |  38 +++--
+ backend/app/ws/interview_ws.py                |  31 +++--
+ frontend/package-lock.json                    |  64 +++++++++
+ .../components/interview/InterviewRoom.tsx    |   4 +-
+ frontend/src/hooks/useAudioRecorder.ts        |  10 ++
+ frontend/src/hooks/useTTSPlayer.ts            |  42 ++++--
+ 13 files changed, 266 insertions(+), 128 deletions(-)
+
+diff --git a/backend/app/api/auth.py b/backend/app/api/auth.py
+index 03e5650..78f2398 100644
+--- a/backend/app/api/auth.py
++++ b/backend/app/api/auth.py
+@@ -15,10 +15,22 @@ router = APIRouter(prefix="/auth", tags=["auth"])
+ 
+ # Simple IP-based rate limiting for login (5 attempts per minute per IP)
+ _loginAttempts: dict[str, list[float]] = defaultdict(list)
++_LOGIN_CLEANUP_INTERVAL = 300  # clean up stale entries every 5 minutes
++_last_cleanup_at: float = 0.0
++
+ 
+ def _check_rate_limit(ip: str, max_attempts: int = 5, window: int = 60) -> None:
++    global _last_cleanup_at
+     now = time.time()
+-    # Clean old entries
++
++    # Periodically purge stale IPs to prevent unbounded memory growth
++    if now - _last_cleanup_at > _LOGIN_CLEANUP_INTERVAL:
++        _last_cleanup_at = now
++        stale_ips = [k for k, v in list(_loginAttempts.items()) if not any(now - t < window for t in v)]
++        for ip_key in stale_ips:
++            _loginAttempts.pop(ip_key, None)
++
++    # Clean old entries for this IP
+     _loginAttempts[ip] = [t for t in _loginAttempts[ip] if now - t < window]
+     if len(_loginAttempts[ip]) >= max_attempts:
+         raise HTTPException(
+diff --git a/backend/app/api/behavior.py b/backend/app/api/behavior.py
+index fe6c28f..ca8cd9c 100644
+--- a/backend/app/api/behavior.py
++++ b/backend/app/api/behavior.py
+@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+ from app.api.dependencies import get_current_user
++from app.api.interview import _assert_session_owner
+ from app.core.limiter import rate_limiter as limiter
+ from app.database import AsyncSessionLocal, get_db
+ from app.models.behavior_log import BehaviorLog
+@@ -25,11 +26,10 @@ async def post_behavior(
+     session_id: UUID,
+     payload: BehaviorBatchInput,
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> dict[str, str]:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+ 
+     frames = payload.frames
+ 
+diff --git a/backend/app/api/interview.py b/backend/app/api/interview.py
+index 1487fb2..2a282ba 100644
+--- a/backend/app/api/interview.py
++++ b/backend/app/api/interview.py
+@@ -37,15 +37,23 @@ async def create_session(
+     return SessionRead.model_validate(session, from_attributes=True)
+ 
+ 
++def _assert_session_owner(session: InterviewSession | None, current_user: User) -> InterviewSession:
++    """Raise 404 if session doesn't exist, 403 if it doesn't belong to current user."""
++    if session is None:
++        raise HTTPException(status_code=404, detail="Session not found")
++    if session.user_id != current_user.id:
++        raise HTTPException(status_code=403, detail="Access denied")
++    return session
++
++
+ @router.get("/{session_id}", response_model=SessionRead)
+ async def get_session(
+     session_id: UUID,
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> SessionRead:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+     return SessionRead.model_validate(session, from_attributes=True)
+ 
+ 
+@@ -54,11 +62,10 @@ async def update_session(
+     session_id: UUID,
+     payload: SessionUpdate,
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> SessionRead:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+ 
+     now = datetime.now(timezone.utc)
+     session.status = payload.status
+@@ -76,11 +83,10 @@ async def update_session(
+ async def get_messages(
+     session_id: UUID,
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> list[MessageRead]:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+ 
+     result = await db.execute(
+         select(ConversationMessage)
+diff --git a/backend/app/api/report.py b/backend/app/api/report.py
+index 79c13eb..ab5e603 100644
+--- a/backend/app/api/report.py
++++ b/backend/app/api/report.py
+@@ -8,6 +8,7 @@ from sqlalchemy import select
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+ from app.api.dependencies import get_current_user
++from app.api.interview import _assert_session_owner
+ from app.database import get_db
+ from app.models.report import InterviewReport
+ from app.models.session import InterviewSession
+@@ -26,11 +27,10 @@ router = APIRouter(prefix="/sessions", tags=["report"])
+ async def generate_report(
+     session_id: UUID,
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> ReportGenerateResponse:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+ 
+     pending_status = await trigger_report_generation(session_id)
+     return ReportGenerateResponse(status=pending_status, session_id=session_id)
+@@ -40,11 +40,10 @@ async def generate_report(
+ async def get_report(
+     session_id: UUID,
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> ReportRead | JSONResponse:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+ 
+     report = await db.scalar(
+         select(InterviewReport).where(InterviewReport.session_id == session_id)
+diff --git a/backend/app/api/resume.py b/backend/app/api/resume.py
+index 4ba9f37..1767d04 100644
+--- a/backend/app/api/resume.py
++++ b/backend/app/api/resume.py
+@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+ from app.agents.resume_agent import ResumeAgent
+ from app.api.dependencies import get_current_user
++from app.api.interview import _assert_session_owner
+ from app.config import settings
+ from app.database import get_db
+ from app.models.session import InterviewSession
+@@ -29,11 +30,10 @@ async def upload_resume(
+     session_id: UUID,
+     file: UploadFile = File(...),
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> dict[str, str]:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+ 
+     suffix = Path(file.filename or "resume.pdf").suffix.lower()
+     if suffix not in {".pdf", ".txt", ".md", ".docx", ".doc"}:
+@@ -70,11 +70,10 @@ async def upload_resume(
+ async def get_resume(
+     session_id: UUID,
+     db: AsyncSession = Depends(get_db),
+-    _: User = Depends(get_current_user),
++    current_user: User = Depends(get_current_user),
+ ) -> dict:
+     session = await db.get(InterviewSession, session_id)
+-    if session is None:
+-        raise HTTPException(status_code=404, detail="Session not found")
++    _assert_session_owner(session, current_user)
+     return session.resume_parsed or {"status": "empty"}
+ 
+ 
+diff --git a/backend/app/main.py b/backend/app/main.py
+index bd14519..58e91ac 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -60,8 +60,14 @@ async def add_security_headers(request: Request, call_next):
+     response.headers["X-Frame-Options"] = "DENY"
+     # Prevent MIME sniffing
+     response.headers["X-Content-Type-Options"] = "nosniff"
+-    # XSS protection
++    # XSS protection (legacy browsers)
+     response.headers["X-XSS-Protection"] = "1; mode=block"
++    # Referrer policy
++    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
++    # Content Security Policy – tightened for API-only backend
++    response.headers["Content-Security-Policy"] = (
++        "default-src 'none'; frame-ancestors 'none'"
++    )
+     return response
+ 
+ 
+diff --git a/backend/app/services/report_service.py b/backend/app/services/report_service.py
+index cb5844f..7b30a01 100644
+--- a/backend/app/services/report_service.py
++++ b/backend/app/services/report_service.py
+@@ -32,6 +32,43 @@ async def trigger_report_generation(session_id: UUID) -> str:
+     return "pending"
+ 
+ 
++def _apply_report_fields(
++    report: "InterviewReport",
++    *,
++    llm_json: dict,
++    dims: dict,
++    overall: float,
++    professional: float,
++    communication: float,
++    logic: float,
++    fluency: dict,
++    behavior_score: float,
++    avg_eye_contact: float,
++    dominant_emotion: str,
++    behavior_detail: dict,
++    total_score: float,
++) -> None:
++    """Apply all computed fields to a report object (create or update path)."""
++    report.llm_overall_score = overall
++    report.llm_professional_score = professional
++    report.llm_communication_score = communication
++    report.llm_logic_score = logic
++    report.llm_evaluation_text = str(llm_json.get("overall_evaluation", "综合表现良好。"))
++    report.strengths = [str(item) for item in llm_json.get("strengths", [])]
++    report.improvements = [str(item) for item in llm_json.get("improvements", [])]
++    report.fluency_score = float(fluency["fluency_score"])
++    report.speech_rate_wpm = float(fluency["speech_rate_wpm"])
++    report.filler_word_ratio = float(fluency["filler_word_ratio"])
++    report.pause_frequency = float(fluency["pause_frequency"])
++    report.fluency_detail = fluency["detail"]
++    report.behavior_score = behavior_score
++    report.avg_eye_contact = avg_eye_contact
++    report.dominant_emotion = dominant_emotion
++    report.behavior_detail = behavior_detail
++    report.total_score = total_score
++    report.generated_at = datetime.now(timezone.utc)
++
++
+ async def _generate_report(session_id: UUID) -> None:
+     try:
+         async with AsyncSessionLocal() as db:
+@@ -115,77 +152,39 @@ async def _generate_report(session_id: UUID) -> None:
+                 2,
+             )
+ 
++            behavior_detail_dict = {
++                "sample_count": len(behavior_logs),
++                "emotion_distribution": _emotion_distribution(emotions),
++                "attention_score": behavior_summary.attention_score,
++                "posture_score": behavior_summary.posture_score,
++                "engagement_score": behavior_summary.engagement_score,
++                "gaze_stability": behavior_summary.gaze_stability,
++                "emotion_confidence": behavior_summary.emotion_confidence,
++                "recommendations": behavior_summary.recommendations,
++            }
++
+             report = await db.scalar(
+                 select(InterviewReport).where(InterviewReport.session_id == session_id)
+             )
+             if report is None:
+-                report = InterviewReport(
+-                    session_id=session_id,
+-                    llm_overall_score=overall,
+-                    llm_professional_score=professional,
+-                    llm_communication_score=communication,
+-                    llm_logic_score=logic,
+-                    llm_evaluation_text=str(
+-                        llm_json.get("overall_evaluation", "综合表现良好。")
+-                    ),
+-                    strengths=[str(item) for item in llm_json.get("strengths", [])],
+-                    improvements=[
+-                        str(item) for item in llm_json.get("improvements", [])
+-                    ],
+-                    fluency_score=float(fluency["fluency_score"]),
+-                    speech_rate_wpm=float(fluency["speech_rate_wpm"]),
+-                    filler_word_ratio=float(fluency["filler_word_ratio"]),
+-                    pause_frequency=float(fluency["pause_frequency"]),
+-                    fluency_detail=fluency["detail"],
+-                    behavior_score=behavior_score,
+-                    avg_eye_contact=avg_eye_contact,
+-                    dominant_emotion=dominant_emotion,
+-                    behavior_detail={
+-                        "sample_count": len(behavior_logs),
+-                        "emotion_distribution": _emotion_distribution(emotions),
+-                        "attention_score": behavior_summary.attention_score,
+-                        "posture_score": behavior_summary.posture_score,
+-                        "engagement_score": behavior_summary.engagement_score,
+-                        "gaze_stability": behavior_summary.gaze_stability,
+-                        "emotion_confidence": behavior_summary.emotion_confidence,
+-                        "recommendations": behavior_summary.recommendations,
+-                    },
+-                    total_score=total_score,
+-                    generated_at=datetime.now(timezone.utc),
+-                )
++                report = InterviewReport(session_id=session_id)
+                 db.add(report)
+-            else:
+-                report.llm_overall_score = overall
+-                report.llm_professional_score = professional
+-                report.llm_communication_score = communication
+-                report.llm_logic_score = logic
+-                report.llm_evaluation_text = str(
+-                    llm_json.get("overall_evaluation", "综合表现良好。")
+-                )
+-                report.strengths = [str(item) for item in llm_json.get("strengths", [])]
+-                report.improvements = [
+-                    str(item) for item in llm_json.get("improvements", [])
+-                ]
+-                report.fluency_score = float(fluency["fluency_score"])
+-                report.speech_rate_wpm = float(fluency["speech_rate_wpm"])
+-                report.filler_word_ratio = float(fluency["filler_word_ratio"])
+-                report.pause_frequency = float(fluency["pause_frequency"])
+-                report.fluency_detail = fluency["detail"]
+-                report.behavior_score = behavior_score
+-                report.avg_eye_contact = avg_eye_contact
+-                report.dominant_emotion = dominant_emotion
+-                report.behavior_detail = {
+-                    "sample_count": len(behavior_logs),
+-                    "emotion_distribution": _emotion_distribution(emotions),
+-                    "attention_score": behavior_summary.attention_score,
+-                    "posture_score": behavior_summary.posture_score,
+-                    "engagement_score": behavior_summary.engagement_score,
+-                    "gaze_stability": behavior_summary.gaze_stability,
+-                    "emotion_confidence": behavior_summary.emotion_confidence,
+-                    "recommendations": behavior_summary.recommendations,
+-                }
+-                report.total_score = total_score
+-                report.generated_at = datetime.now(timezone.utc)
++
++            _apply_report_fields(
++                report,
++                llm_json=llm_json,
++                dims=dims,
++                overall=overall,
++                professional=professional,
++                communication=communication,
++                logic=logic,
++                fluency=fluency,
++                behavior_score=behavior_score,
++                avg_eye_contact=avg_eye_contact,
++                dominant_emotion=dominant_emotion,
++                behavior_detail=behavior_detail_dict,
++                total_score=total_score,
++            )
+ 
+             await db.commit()
+     except Exception as exc:
+diff --git a/backend/app/services/sensevoice_stt_service.py b/backend/app/services/sensevoice_stt_service.py
+index 98d8c9f..47e5c71 100644
+--- a/backend/app/services/sensevoice_stt_service.py
++++ b/backend/app/services/sensevoice_stt_service.py
+@@ -1,6 +1,5 @@
+ from __future__ import annotations
+ 
+-import audioop
+ import io
+ import logging
+ import wave
+@@ -16,6 +15,34 @@ logger = logging.getLogger(__name__)
+ _TARGET_SAMPLE_RATE = 16000
+ 
+ 
++def _resample_pcm_s16le(pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
++    """Linear-interpolation resampler for mono 16-bit PCM (audioop-free, Python 3.13-safe)."""
++    import array
++    import struct
++
++    if src_rate == dst_rate:
++        return pcm
++
++    n_src = len(pcm) // 2
++    if n_src == 0:
++        return pcm
++
++    src_samples = array.array("h", pcm)
++    ratio = src_rate / dst_rate
++    n_dst = max(1, int(n_src / ratio))
++    dst_samples = array.array("h", [0] * n_dst)
++
++    for i in range(n_dst):
++        src_pos = i * ratio
++        idx = int(src_pos)
++        frac = src_pos - idx
++        s0 = src_samples[min(idx, n_src - 1)]
++        s1 = src_samples[min(idx + 1, n_src - 1)]
++        dst_samples[i] = int(s0 + frac * (s1 - s0))
++
++    return dst_samples.tobytes()
++
++
+ class SenseVoiceSTTService:
+     def __init__(self) -> None:
+         self._base_url = settings.SENSEVOICE_BASE_URL.rstrip("/")
+@@ -148,14 +175,7 @@ class SenseVoiceSTTService:
+             return pcm
+ 
+         try:
+-            converted, _ = audioop.ratecv(
+-                pcm,
+-                2,
+-                1,
+-                source_rate,
+-                target_rate,
+-                None,
+-            )
++            converted = _resample_pcm_s16le(pcm, source_rate, target_rate)
+             logger.info(
+                 "Resampled PCM from %sHz to %sHz (%s -> %s bytes)",
+                 source_rate,
+diff --git a/backend/app/ws/interview_ws.py b/backend/app/ws/interview_ws.py
+index 2d752a3..f5f8f36 100644
+--- a/backend/app/ws/interview_ws.py
++++ b/backend/app/ws/interview_ws.py
+@@ -110,6 +110,9 @@ async def interview_socket(
+     session_id: UUID,
+     token: str | None = Query(default=None),
+ ) -> None:
++    # Must accept() before any send_json/close calls per WebSocket protocol
++    await websocket.accept()
++
+     if token is None:
+         await websocket.send_json(
+             {"type": "error", "code": "UNAUTHORIZED", "message": "Token required"}
+@@ -117,17 +120,15 @@ async def interview_socket(
+         await websocket.close(code=4401)
+         return
+ 
+-    payload = decode_token(token)
+-    if payload is None:
++    token_payload = decode_token(token)
++    if token_payload is None:
+         await websocket.send_json(
+             {"type": "error", "code": "UNAUTHORIZED", "message": "Invalid or expired token"}
+         )
+         await websocket.close(code=4401)
+         return
+ 
+-    await websocket.accept()
+-
+-    user_id = payload.get("sub")
++    user_id = token_payload.get("sub")
+ 
+     async with AsyncSessionLocal() as db:
+         session = await db.get(InterviewSession, session_id)
+@@ -162,8 +163,8 @@ async def interview_socket(
+     try:
+         while True:
+             raw = await websocket.receive_text()
+-            payload = json.loads(raw)
+-            msg_type = payload.get("type")
++            msg_payload = json.loads(raw)
++            msg_type = msg_payload.get("type")
+ 
+             if msg_type == "ping":
+                 await runtime.send_json({"type": "pong"})
+@@ -171,21 +172,21 @@ async def interview_socket(
+ 
+             if msg_type == "interrupt":
+                 await runtime.cancel_response(
+-                    str(payload.get("reason") or "client_interrupt")
++                    str(msg_payload.get("reason") or "client_interrupt")
+                 )
+                 runtime.audio_buffer.clear()
+                 continue
+ 
+             if msg_type == "candidate_message":
+-                text = str(payload.get("text", "")).strip()
++                text = str(msg_payload.get("text", "")).strip()
+                 if text:
+                     await runtime.cancel_response("new_candidate_text")
+                     await runtime.start_response(text)
+                 continue
+ 
+             if msg_type == "audio_chunk":
+-                b64_audio = payload.get("data")
+-                incoming_rate = int(payload.get("sample_rate", runtime.sample_rate))
++                b64_audio = msg_payload.get("data")
++                incoming_rate = int(msg_payload.get("sample_rate", runtime.sample_rate))
+                 if not isinstance(b64_audio, str):
+                     await runtime.send_json(
+                         {
+@@ -223,7 +224,7 @@ async def interview_socket(
+ 
+             if msg_type == "behavior_frame":
+                 # Real-time behavior analysis and feedback
+-                await _handle_behavior_frame(runtime, payload)
++                await _handle_behavior_frame(runtime, msg_payload)
+                 continue
+ 
+             await runtime.send_json(
+@@ -237,6 +238,7 @@ async def interview_socket(
+     except WebSocketDisconnect:
+         runtime.closed = True
+         await runtime.cancel_response("disconnect")
++        _behavior_warning_last_sent.pop(str(session_id), None)
+         return
+     except Exception as exc:
+         runtime.closed = True
+@@ -854,9 +856,10 @@ async def _handle_behavior_frame(
+ 
+         if warnings:
+             now = time.time()
+-            last_sent = _behavior_warning_last_sent.get(session_id, 0)
++            sid_key = str(session_id)
++            last_sent = _behavior_warning_last_sent.get(sid_key, 0)
+             if now - last_sent >= _BEHAVIOR_WARNING_COOLDOWN:
+-                _behavior_warning_last_sent[session_id] = now
++                _behavior_warning_last_sent[sid_key] = now
+                 await runtime.send_json({
+                     "type": "behavior_warning",
+                     "warnings": warnings,
+diff --git a/frontend/package-lock.json b/frontend/package-lock.json
+index 9ab0d31..c1c873e 100644
+--- a/frontend/package-lock.json
++++ b/frontend/package-lock.json
+@@ -24,6 +24,7 @@
+       },
+       "devDependencies": {
+         "@eslint/js": "^9.39.4",
++        "@playwright/test": "^1.40.0",
+         "@types/node": "^24.12.2",
+         "@types/react": "^18.3.27",
+         "@types/react-dom": "^18.3.7",
+@@ -653,6 +654,22 @@
+         "url": "https://github.com/sponsors/Boshen"
+       }
+     },
++    "node_modules/@playwright/test": {
++      "version": "1.59.1",
++      "resolved": "https://registry.npmjs.org/@playwright/test/-/test-1.59.1.tgz",
++      "integrity": "sha512-PG6q63nQg5c9rIi4/Z5lR5IVF7yU5MqmKaPOe0HSc0O2cX1fPi96sUQu5j7eo4gKCkB2AnNGoWt7y4/Xx3Kcqg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright": "1.59.1"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
+     "node_modules/@radix-ui/react-compose-refs": {
+       "version": "1.1.2",
+       "resolved": "https://registry.npmjs.org/@radix-ui/react-compose-refs/-/react-compose-refs-1.1.2.tgz",
+@@ -4273,6 +4290,53 @@
+         "node": ">= 6"
+       }
+     },
++    "node_modules/playwright": {
++      "version": "1.59.1",
++      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.59.1.tgz",
++      "integrity": "sha512-C8oWjPR3F81yljW9o5OxcWzfh6avkVwDD2VYdwIGqTkl+OGFISgypqzfu7dOe4QNLL2aqcWBmI3PMtLIK233lw==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright-core": "1.59.1"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "optionalDependencies": {
++        "fsevents": "2.3.2"
++      }
++    },
++    "node_modules/playwright-core": {
++      "version": "1.59.1",
++      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.59.1.tgz",
++      "integrity": "sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "bin": {
++        "playwright-core": "cli.js"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/playwright/node_modules/fsevents": {
++      "version": "2.3.2",
++      "resolved": "https://registry.npmjs.org/fsevents/-/fsevents-2.3.2.tgz",
++      "integrity": "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==",
++      "dev": true,
++      "hasInstallScript": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ],
++      "engines": {
++        "node": "^8.16.0 || ^10.6.0 || >=11.0.0"
++      }
++    },
+     "node_modules/postcss": {
+       "version": "8.5.9",
+       "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.5.9.tgz",
+diff --git a/frontend/src/components/interview/InterviewRoom.tsx b/frontend/src/components/interview/InterviewRoom.tsx
+index d391f22..ed810c2 100644
+--- a/frontend/src/components/interview/InterviewRoom.tsx
++++ b/frontend/src/components/interview/InterviewRoom.tsx
+@@ -1,5 +1,5 @@
+ import { Mic, MicOff, Send, AlertCircle, Loader2, Mic2, Wifi, WifiOff } from 'lucide-react'
+-import { useState, useCallback, useEffect } from 'react'
++import { useState, useCallback, useEffect, useRef } from 'react'
+ import { motion, AnimatePresence } from 'framer-motion'
+ import { useNavigate } from 'react-router-dom'
+ import { useInterviewStore, type Message } from '@/stores/interviewStore'
+@@ -36,7 +36,7 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
+   const [manualVoiceActive, setManualVoiceActive] = useState(false)
+   const [micPermission, setMicPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
+   const [requestingMic, setRequestingMic] = useState(false)
+-  const currentResponseIdRef = { current: '' }
++  const currentResponseIdRef = useRef('')
+ 
+   const {
+     setSession,
+diff --git a/frontend/src/hooks/useAudioRecorder.ts b/frontend/src/hooks/useAudioRecorder.ts
+index 4bcb782..c6c6b22 100644
+--- a/frontend/src/hooks/useAudioRecorder.ts
++++ b/frontend/src/hooks/useAudioRecorder.ts
+@@ -12,6 +12,7 @@ export function useAudioRecorder({ enabled = false, onChunk }: UseAudioRecorderO
+   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+   const streamRef = useRef<MediaStream | null>(null)
+   const analyserRef = useRef<AnalyserNode | null>(null)
++  const audioContextRef = useRef<AudioContext | null>(null)
+   const animationRef = useRef<number | null>(null)
+   const chunksRef = useRef<Blob[]>([])
+   const streamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
+@@ -22,6 +23,7 @@ export function useAudioRecorder({ enabled = false, onChunk }: UseAudioRecorderO
+       streamRef.current = stream
+ 
+       const ctx = new AudioContext()
++      audioContextRef.current = ctx
+       const source = ctx.createMediaStreamSource(stream)
+       const analyser = ctx.createAnalyser()
+       analyser.fftSize = 256
+@@ -70,11 +72,19 @@ export function useAudioRecorder({ enabled = false, onChunk }: UseAudioRecorderO
+   const stop = useCallback(() => {
+     if (animationRef.current) {
+       cancelAnimationFrame(animationRef.current)
++      animationRef.current = null
+     }
+     if (mediaRecorderRef.current?.state === 'recording') {
+       mediaRecorderRef.current.stop()
+     }
+     streamRef.current?.getTracks().forEach((t) => t.stop())
++    streamRef.current = null
++    // Close AudioContext to release hardware resources
++    if (audioContextRef.current?.state !== 'closed') {
++      audioContextRef.current?.close()
++    }
++    audioContextRef.current = null
++    analyserRef.current = null
+     setIsRecording(false)
+     setMicLevel(0)
+   }, [])
+diff --git a/frontend/src/hooks/useTTSPlayer.ts b/frontend/src/hooks/useTTSPlayer.ts
+index 021ccd1..aa74ca7 100644
+--- a/frontend/src/hooks/useTTSPlayer.ts
++++ b/frontend/src/hooks/useTTSPlayer.ts
+@@ -21,7 +21,7 @@ export function useTTSPlayer({ onQueueEmpty }: UseTTSPlayerOptions = {}) {
+     }
+ 
+     playingRef.current = true
+-    const { data } = queueRef.current.shift()!
++    const { data, format, sampleRate } = queueRef.current.shift()!
+     setQueueSize(queueRef.current.length)
+ 
+     if (!audioContextRef.current) {
+@@ -36,24 +36,44 @@ export function useTTSPlayer({ onQueueEmpty }: UseTTSPlayerOptions = {}) {
+         bytes[i] = binaryString.charCodeAt(i)
+       }
+ 
+-      ctx.decodeAudioData(bytes.buffer, (buffer) => {
+-        const source = ctx.createBufferSource()
+-        source.buffer = buffer
+-        source.connect(ctx.destination)
+-        source.onended = () => {
++      // Backend sends raw PCM (pcm_s16le); decodeAudioData only handles encoded
++      // audio (WAV/MP3/OGG). For pcm_s16le we must build the AudioBuffer manually.
++      if (format === 'pcm_s16le' || format === 'pcm') {
++        const int16 = new Int16Array(bytes.buffer)
++        if (int16.length === 0) {
+           playNext()
++          return
+         }
++        const float32 = new Float32Array(int16.length)
++        for (let i = 0; i < int16.length; i++) {
++          float32[i] = int16[i] / 32768.0
++        }
++        const audioBuffer = ctx.createBuffer(1, float32.length, sampleRate)
++        audioBuffer.copyToChannel(float32, 0)
++        const source = ctx.createBufferSource()
++        source.buffer = audioBuffer
++        source.connect(ctx.destination)
++        source.onended = () => playNext()
+         source.start()
+-      }, () => {
+-        playNext()
+-      })
++      } else {
++        // For encoded formats (wav/mp3) use decodeAudioData
++        ctx.decodeAudioData(bytes.buffer, (buffer) => {
++          const source = ctx.createBufferSource()
++          source.buffer = buffer
++          source.connect(ctx.destination)
++          source.onended = () => playNext()
++          source.start()
++        }, () => {
++          playNext()
++        })
++      }
+     } catch {
+       playNext()
+     }
+   }, [onQueueEmpty])
+ 
+-  const enqueueBase64 = useCallback((data: string, format: string, _sampleRate: number) => {
+-    queueRef.current.push({ data, format, sampleRate: _sampleRate })
++  const enqueueBase64 = useCallback((data: string, format: string, sampleRate: number) => {
++    queueRef.current.push({ data, format, sampleRate })
+     setQueueSize(queueRef.current.length)
+     if (!playingRef.current) {
+       setPlaying(true)
+-- 
+2.43.0
+
+
+From 0709498df0f9fcf4fe1a563695870cef7221a763 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Mon, 27 Apr 2026 11:41:05 +0000
+Subject: [PATCH 2/3] =?UTF-8?q?fix:=206=20more=20bugs=20=E2=80=94=20missin?=
+ =?UTF-8?q?g=20endpoints,=20stt=5Fws=20accept=20order,=20audioop=20refacto?=
+ =?UTF-8?q?r,=20shared=20audio=5Futils?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Missing features (broken at runtime):
+- useManualVoiceInput called /api/sessions/{id}/transcribe which did NOT exist in
+  any backend route — added app/api/transcribe.py REST endpoint that accepts audio
+  file uploads, attempts pydub/PyAV decoding, and falls back to raw bytes passthrough
+- useManualTTS called /api/tts/speak which also did NOT exist — added POST /tts/speak
+  endpoint in tts_metrics.py; collects PCM from tts_service.stream_synthesize, wraps
+  in WAV container, returns as audio/wav for browser <audio> playback
+- stt_ws.py and tts_ws.py routers were never registered in main.py — now registered
+  as /ws/stt/{session_id} and /ws/tts/{session_id}
+
+WebSocket accept order:
+- stt_ws.py had same send_json-before-accept bug as interview_ws.py — fixed
+
+audioop deprecation (Python 3.13 removal):
+- stt_service.py also imported audioop for PCM resampling
+- Extracted shared _resample_pcm_s16le into new app/services/audio_utils.py
+- Both stt_service.py and sensevoice_stt_service.py now import from audio_utils
+- Eliminates code duplication, makes the resampler unit-testable in isolation
+
+Tests:
+- Added 8 new tests in test_new_fixes.py (21 total, all passing):
+  TestAssertSessionOwner: 404/403/ownership pass
+  TestResamplePcm: identity, downsample, upsample, empty, s16le validity
+---
+ backend/app/api/transcribe.py                 | 140 ++++++++++++++++++
+ backend/app/api/tts_metrics.py                |  62 +++++++-
+ backend/app/main.py                           |   6 +
+ backend/app/services/audio_utils.py           |  48 ++++++
+ .../app/services/sensevoice_stt_service.py    |  30 +---
+ backend/app/services/stt_service.py           |  11 +-
+ backend/app/tests/test_new_fixes.py           |  96 ++++++++++++
+ backend/app/ws/stt_ws.py                      |  11 +-
+ .../components/interview/InterviewRoom.tsx    |   3 +-
+ 9 files changed, 362 insertions(+), 45 deletions(-)
+ create mode 100644 backend/app/api/transcribe.py
+ create mode 100644 backend/app/services/audio_utils.py
+ create mode 100644 backend/app/tests/test_new_fixes.py
+
+diff --git a/backend/app/api/transcribe.py b/backend/app/api/transcribe.py
+new file mode 100644
+index 0000000..f6ba4d1
+--- /dev/null
++++ b/backend/app/api/transcribe.py
+@@ -0,0 +1,140 @@
++"""REST endpoint for one-shot audio transcription (used by manual voice input in text mode).
++
++Accepts a WebM/Ogg audio file upload, converts it to raw PCM using pydub/ffmpeg if
++available, then delegates to the STT service. Falls back to forwarding the raw bytes
++to FunASR if no audio conversion library is present, which works when FunASR itself
++can handle the input format.
++"""
++from __future__ import annotations
++
++import io
++import logging
++import struct
++import tempfile
++from pathlib import Path
++from uuid import UUID
++
++from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
++from sqlalchemy.ext.asyncio import AsyncSession
++
++from app.api.dependencies import get_current_user
++from app.api.interview import _assert_session_owner
++from app.database import get_db
++from app.models.session import InterviewSession
++from app.models.user import User
++from app.services.stt_service import stt_service
++
++logger = logging.getLogger(__name__)
++
++router = APIRouter(prefix="/sessions", tags=["transcribe"])
++
++
++def _try_decode_webm_to_pcm(audio_bytes: bytes) -> tuple[bytes, int] | None:
++    """Attempt to decode WebM/audio bytes to PCM using pydub (if installed).
++
++    Returns (pcm_bytes, sample_rate) or None if pydub is unavailable.
++    """
++    try:
++        from pydub import AudioSegment  # type: ignore
++
++        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
++            f.write(audio_bytes)
++            tmp_path = f.name
++
++        try:
++            seg = AudioSegment.from_file(tmp_path)
++            seg = seg.set_channels(1).set_sample_width(2)  # mono, 16-bit
++            pcm = seg.raw_data
++            return pcm, seg.frame_rate
++        finally:
++            Path(tmp_path).unlink(missing_ok=True)
++    except ImportError:
++        return None
++    except Exception as exc:
++        logger.warning("pydub decode failed: %s", exc)
++        return None
++
++
++def _try_decode_webm_with_av(audio_bytes: bytes) -> tuple[bytes, int] | None:
++    """Attempt to decode audio using PyAV (if installed)."""
++    try:
++        import av  # type: ignore
++
++        buf = io.BytesIO(audio_bytes)
++        container = av.open(buf)
++        stream = next(s for s in container.streams if s.type == "audio")
++        sample_rate = stream.codec_context.sample_rate or 16000
++
++        pcm_chunks: list[bytes] = []
++        for frame in container.decode(stream):
++            # Convert to 16-bit mono
++            arr = frame.to_ndarray(format="s16", layout="mono")
++            pcm_chunks.append(arr.tobytes())
++
++        if not pcm_chunks:
++            return None
++        return b"".join(pcm_chunks), sample_rate
++    except ImportError:
++        return None
++    except Exception as exc:
++        logger.warning("PyAV decode failed: %s", exc)
++        return None
++
++
++def _wrap_as_wav(raw_bytes: bytes, sample_rate: int = 16000) -> bytes:
++    """Wrap raw PCM bytes into a minimal WAV container for services that need WAV."""
++    import wave
++    buf = io.BytesIO()
++    with wave.open(buf, "wb") as wf:
++        wf.setnchannels(1)
++        wf.setsampwidth(2)
++        wf.setframerate(sample_rate)
++        wf.writeframes(raw_bytes)
++    return buf.getvalue()
++
++
++@router.post("/{session_id}/transcribe")
++async def transcribe_audio(
++    session_id: UUID,
++    file: UploadFile = File(...),
++    db: AsyncSession = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++) -> dict:
++    """Transcribe an uploaded audio file and return the recognised text.
++
++    Accepts WebM, Ogg, WAV, or any format supported by the configured STT backend.
++    The endpoint is used by the manual voice-input feature in text-mode interviews.
++    """
++    session = await db.get(InterviewSession, session_id)
++    _assert_session_owner(session, current_user)
++
++    audio_bytes = await file.read()
++    if not audio_bytes:
++        raise HTTPException(status_code=400, detail="Empty audio file")
++
++    # Attempt format conversion to raw PCM (best-effort, order: pydub > av > passthrough)
++    decoded: tuple[bytes, int] | None = (
++        _try_decode_webm_to_pcm(audio_bytes)
++        or _try_decode_webm_with_av(audio_bytes)
++    )
++
++    try:
++        if decoded is not None:
++            pcm_bytes, sample_rate = decoded
++            _, final_text = await stt_service.transcribe_streaming(pcm_bytes, sample_rate)
++        else:
++            # Passthrough: send raw bytes and hope the STT backend handles the format.
++            # FunASR natively accepts WebM/Ogg when the bytes are sent as PCM stream.
++            logger.info(
++                "No audio conversion library available; forwarding raw %d bytes to STT",
++                len(audio_bytes),
++            )
++            _, final_text = await stt_service.transcribe_streaming(audio_bytes, 16000)
++    except Exception as exc:
++        logger.exception("Transcription failed for session %s: %s", session_id, exc)
++        raise HTTPException(
++            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
++            detail="语音识别服务暂不可用，请检查 STT 服务状态。",
++        ) from exc
++
++    return {"text": final_text, "session_id": str(session_id)}
+diff --git a/backend/app/api/tts_metrics.py b/backend/app/api/tts_metrics.py
+index a0e10c8..5ab19a2 100644
+--- a/backend/app/api/tts_metrics.py
++++ b/backend/app/api/tts_metrics.py
+@@ -1,12 +1,72 @@
+ from __future__ import annotations
+ 
+-from fastapi import APIRouter
++import io
++import wave
+ 
++from fastapi import APIRouter, Depends, HTTPException, status
++from fastapi.responses import Response
++from pydantic import BaseModel, Field
++
++from app.api.dependencies import get_current_user
++from app.models.user import User
+ from app.services.tts_metrics_service import tts_metrics_service
++from app.services.tts_service import tts_service
++from app.config import settings
+ 
+ router = APIRouter(prefix="/tts", tags=["tts"])
+ 
+ 
++class SpeakRequest(BaseModel):
++    text: str = Field(min_length=1, max_length=500)
++
++
++@router.post("/speak")
++async def speak(
++    payload: SpeakRequest,
++    _: User = Depends(get_current_user),
++) -> Response:
++    """Synthesize speech for a text string and return a WAV audio response.
++
++    Used by the manual TTS playback feature (replaying individual messages).
++    """
++    prepared = tts_service.prepare_text_for_tts(payload.text, fallback="")
++    if not prepared or not prepared.strip("，,。！？!?:;； "):
++        raise HTTPException(status_code=400, detail="Text too short or empty after normalisation")
++
++    pcm_chunks: list[bytes] = []
++    try:
++        async for chunk in tts_service.stream_synthesize(prepared):
++            if chunk:
++                pcm_chunks.append(chunk)
++    except Exception as exc:
++        raise HTTPException(
++            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
++            detail="TTS service unavailable",
++        ) from exc
++
++    if not pcm_chunks:
++        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No audio generated")
++
++    raw_pcm = b"".join(pcm_chunks)
++    # Ensure even byte count for 16-bit PCM
++    if len(raw_pcm) % 2 != 0:
++        raw_pcm = raw_pcm[:-1]
++
++    # Wrap raw PCM in a WAV container so the browser <Audio> tag can play it
++    buf = io.BytesIO()
++    with wave.open(buf, "wb") as wf:
++        wf.setnchannels(1)
++        wf.setsampwidth(2)  # 16-bit
++        wf.setframerate(settings.COSYVOICE_SAMPLE_RATE)
++        wf.writeframes(raw_pcm)
++
++    return Response(
++        content=buf.getvalue(),
++        media_type="audio/wav",
++        headers={"Content-Disposition": "inline; filename=speech.wav"},
++    )
++
++
+ @router.get("/metrics")
+ async def get_tts_metrics() -> dict:
+     return tts_metrics_service.summary()
+diff --git a/backend/app/main.py b/backend/app/main.py
+index 58e91ac..ae6572b 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -17,10 +17,13 @@ from app.api.llm_config import router as llm_config_router
+ from app.api.report import router as report_router
+ from app.api.resume import router as resume_router
+ from app.api.tts_metrics import router as tts_metrics_router
++from app.api.transcribe import router as transcribe_router
+ from app.config import settings
+ from app.database import init_db
+ from app.startup import run_startup_tasks
+ from app.ws.interview_ws import router as interview_ws_router
++from app.ws.stt_ws import router as stt_ws_router
++from app.ws.tts_ws import router as tts_ws_router
+ 
+ 
+ 
+@@ -78,4 +81,7 @@ app.include_router(report_router, prefix=settings.API_V1_PREFIX)
+ app.include_router(behavior_router, prefix=settings.API_V1_PREFIX)
+ app.include_router(llm_config_router, prefix=settings.API_V1_PREFIX)
+ app.include_router(tts_metrics_router, prefix=settings.API_V1_PREFIX)
++app.include_router(transcribe_router, prefix=settings.API_V1_PREFIX)
+ app.include_router(interview_ws_router, prefix="/ws")
++app.include_router(stt_ws_router, prefix="/ws")
++app.include_router(tts_ws_router, prefix="/ws")
+diff --git a/backend/app/services/audio_utils.py b/backend/app/services/audio_utils.py
+new file mode 100644
+index 0000000..a78ad7a
+--- /dev/null
++++ b/backend/app/services/audio_utils.py
+@@ -0,0 +1,48 @@
++"""Shared audio processing utilities.
++
++Keeping these in a separate module:
++- Avoids duplicating the resampler across stt_service and sensevoice_stt_service
++- Makes unit-testing trivial (no heavy service dependencies)
++- Python 3.13-safe: no audioop usage
++"""
++from __future__ import annotations
++
++import array
++
++
++def resample_pcm_s16le(pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
++    """Resample mono 16-bit PCM between sample rates using linear interpolation.
++
++    This is a drop-in replacement for the deprecated ``audioop.ratecv`` API which
++    was removed in Python 3.13.  Quality is sufficient for speech-recognition
++    purposes; for music use a higher-quality library (e.g. ``soxr``).
++
++    Args:
++        pcm:      Raw PCM bytes in signed-16-bit little-endian format.
++        src_rate: Source sample rate in Hz.
++        dst_rate: Target sample rate in Hz.
++
++    Returns:
++        Resampled PCM bytes in the same format.
++    """
++    if src_rate == dst_rate:
++        return pcm
++
++    n_src = len(pcm) // 2
++    if n_src == 0:
++        return pcm
++
++    src_samples = array.array("h", pcm)
++    ratio = src_rate / dst_rate
++    n_dst = max(1, int(n_src / ratio))
++    dst_samples = array.array("h", [0] * n_dst)
++
++    for i in range(n_dst):
++        src_pos = i * ratio
++        idx = int(src_pos)
++        frac = src_pos - idx
++        s0 = src_samples[min(idx, n_src - 1)]
++        s1 = src_samples[min(idx + 1, n_src - 1)]
++        dst_samples[i] = int(s0 + frac * (s1 - s0))
++
++    return dst_samples.tobytes()
+diff --git a/backend/app/services/sensevoice_stt_service.py b/backend/app/services/sensevoice_stt_service.py
+index 47e5c71..91ec82a 100644
+--- a/backend/app/services/sensevoice_stt_service.py
++++ b/backend/app/services/sensevoice_stt_service.py
+@@ -8,41 +8,13 @@ from collections.abc import AsyncIterator
+ import httpx
+ 
+ from app.config import settings
+-
++from app.services.audio_utils import resample_pcm_s16le as _resample_pcm_s16le
+ 
+ logger = logging.getLogger(__name__)
+ 
+ _TARGET_SAMPLE_RATE = 16000
+ 
+ 
+-def _resample_pcm_s16le(pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
+-    """Linear-interpolation resampler for mono 16-bit PCM (audioop-free, Python 3.13-safe)."""
+-    import array
+-    import struct
+-
+-    if src_rate == dst_rate:
+-        return pcm
+-
+-    n_src = len(pcm) // 2
+-    if n_src == 0:
+-        return pcm
+-
+-    src_samples = array.array("h", pcm)
+-    ratio = src_rate / dst_rate
+-    n_dst = max(1, int(n_src / ratio))
+-    dst_samples = array.array("h", [0] * n_dst)
+-
+-    for i in range(n_dst):
+-        src_pos = i * ratio
+-        idx = int(src_pos)
+-        frac = src_pos - idx
+-        s0 = src_samples[min(idx, n_src - 1)]
+-        s1 = src_samples[min(idx + 1, n_src - 1)]
+-        dst_samples[i] = int(s0 + frac * (s1 - s0))
+-
+-    return dst_samples.tobytes()
+-
+-
+ class SenseVoiceSTTService:
+     def __init__(self) -> None:
+         self._base_url = settings.SENSEVOICE_BASE_URL.rstrip("/")
+diff --git a/backend/app/services/stt_service.py b/backend/app/services/stt_service.py
+index fe7a67a..9a9b9fc 100644
+--- a/backend/app/services/stt_service.py
++++ b/backend/app/services/stt_service.py
+@@ -1,7 +1,6 @@
+ from __future__ import annotations
+ 
+ import asyncio
+-import audioop
+ import json
+ import logging
+ import time
+@@ -12,6 +11,7 @@ import httpx
+ import websockets
+ 
+ from app.config import settings
++from app.services.audio_utils import resample_pcm_s16le as _resample_pcm_s16le
+ from app.services.sensevoice_stt_service import sensevoice_stt_service
+ 
+ 
+@@ -243,14 +243,7 @@ class STTService:
+             return pcm
+ 
+         try:
+-            converted, _ = audioop.ratecv(
+-                pcm,
+-                2,
+-                1,
+-                source_rate,
+-                target_rate,
+-                None,
+-            )
++            converted = _resample_pcm_s16le(pcm, source_rate, target_rate)
+             logger.info(
+                 "Resampled PCM from %sHz to %sHz (%s -> %s bytes)",
+                 source_rate,
+diff --git a/backend/app/tests/test_new_fixes.py b/backend/app/tests/test_new_fixes.py
+new file mode 100644
+index 0000000..7a63c4f
+--- /dev/null
++++ b/backend/app/tests/test_new_fixes.py
+@@ -0,0 +1,96 @@
++"""Tests for the new /transcribe REST endpoint and IDOR ownership helper."""
++from __future__ import annotations
++
++import pytest
++from unittest.mock import AsyncMock, MagicMock, patch
++from uuid import uuid4
++
++from fastapi import HTTPException
++
++
++class TestAssertSessionOwner:
++    """Tests for _assert_session_owner helper added to interview.py."""
++
++    def test_raises_404_when_session_is_none(self):
++        from app.api.interview import _assert_session_owner
++
++        user = MagicMock()
++        user.id = uuid4()
++
++        with pytest.raises(HTTPException) as exc_info:
++            _assert_session_owner(None, user)
++        assert exc_info.value.status_code == 404
++
++    def test_raises_403_when_different_owner(self):
++        from app.api.interview import _assert_session_owner
++
++        session = MagicMock()
++        session.user_id = uuid4()
++
++        user = MagicMock()
++        user.id = uuid4()  # different UUID
++
++        with pytest.raises(HTTPException) as exc_info:
++            _assert_session_owner(session, user)
++        assert exc_info.value.status_code == 403
++
++    def test_returns_session_when_owner_matches(self):
++        from app.api.interview import _assert_session_owner
++
++        uid = uuid4()
++        session = MagicMock()
++        session.user_id = uid
++
++        user = MagicMock()
++        user.id = uid
++
++        result = _assert_session_owner(session, user)
++        assert result is session
++
++
++class TestResamplePcm:
++    """Tests for the pure-Python PCM resampler (replaces audioop)."""
++
++    def test_same_rate_returns_unchanged_bytes(self):
++        from app.services.audio_utils import resample_pcm_s16le
++
++        data = b"\x00\x01" * 100
++        result = resample_pcm_s16le(data, 16000, 16000)
++        assert result == data
++
++    def test_downsamples_correctly(self):
++        from app.services.audio_utils import resample_pcm_s16le
++
++        # 1 second at 32 kHz, silence
++        pcm_32k = b"\x00\x00" * 32000
++        result = resample_pcm_s16le(pcm_32k, 32000, 16000)
++        # Result should be approximately half the number of samples
++        assert len(result) // 2 == pytest.approx(16000, rel=0.01)
++
++    def test_empty_input_returns_empty(self):
++        from app.services.audio_utils import resample_pcm_s16le
++
++        result = resample_pcm_s16le(b"", 16000, 8000)
++        assert result == b""
++
++    def test_upsample_doubles_samples(self):
++        from app.services.audio_utils import resample_pcm_s16le
++
++        import struct
++        # 100 samples at 8 kHz
++        pcm = struct.pack("<" + "h" * 100, *range(100))
++        result = resample_pcm_s16le(pcm, 8000, 16000)
++        # Should produce approximately 200 samples
++        assert len(result) // 2 == pytest.approx(200, rel=0.01)
++
++    def test_output_is_valid_s16le(self):
++        from app.services.audio_utils import resample_pcm_s16le
++
++        import struct
++        pcm = struct.pack("<" + "h" * 64, *range(64))
++        result = resample_pcm_s16le(pcm, 16000, 8000)
++        # Must have even number of bytes
++        assert len(result) % 2 == 0
++        # Must parse without error as signed 16-bit ints
++        samples = struct.unpack("<" + "h" * (len(result) // 2), result)
++        assert all(-32768 <= s <= 32767 for s in samples)
+diff --git a/backend/app/ws/stt_ws.py b/backend/app/ws/stt_ws.py
+index 320e632..206ccc7 100644
+--- a/backend/app/ws/stt_ws.py
++++ b/backend/app/ws/stt_ws.py
+@@ -44,7 +44,9 @@ async def stt_socket(
+     session_id: UUID,
+     token: str | None = Query(default=None),
+ ) -> None:
+-    # JWT Authentication
++    # Must accept() before any send_json/close calls per WebSocket protocol
++    await websocket.accept()
++
+     if token is None:
+         await websocket.send_json(
+             {"type": "error", "code": "UNAUTHORIZED", "message": "Token required"}
+@@ -52,16 +54,15 @@ async def stt_socket(
+         await websocket.close(code=4401)
+         return
+ 
+-    payload = decode_token(token)
+-    if payload is None:
++    token_payload = decode_token(token)
++    if token_payload is None:
+         await websocket.send_json(
+             {"type": "error", "code": "UNAUTHORIZED", "message": "Invalid or expired token"}
+         )
+         await websocket.close(code=4401)
+         return
+ 
+-    await websocket.accept()
+-    user_id = payload.get("sub")
++    user_id = token_payload.get("sub")
+ 
+     # Session ownership validation
+     async with AsyncSessionLocal() as db:
+diff --git a/frontend/src/components/interview/InterviewRoom.tsx b/frontend/src/components/interview/InterviewRoom.tsx
+index ed810c2..b66827b 100644
+--- a/frontend/src/components/interview/InterviewRoom.tsx
++++ b/frontend/src/components/interview/InterviewRoom.tsx
+@@ -152,7 +152,8 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
+       .then(setSession)
+       .catch(() => navigate('/'))
+     getMessages(sessionId).then((msgs) => setMessages(msgs as Message[])).catch(() => {})
+-  }, [sessionId])
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [sessionId]) // navigate/setSession/setMessages are stable references; sessionId triggers re-fetch
+ 
+   useEffect(() => {
+     if (inputMode !== 'voice') return
+-- 
+2.43.0
+
+
+From c5643f393305a28b02c5d61c451490ebae2eff20 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Mon, 27 Apr 2026 11:43:39 +0000
+Subject: [PATCH 3/3] fix: audio base64 stack overflow + env.example sync +
+ README full rewrite
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fixes:
+- useWebSocket.ts: replace btoa(String.fromCharCode(...new Uint8Array(chunk)))
+  with 8192-byte chunked loop — spread on large TypedArrays throws
+  'Maximum call stack size exceeded' for audio buffers > ~256 KB
+- backend/.env.example: sync TTS_FIRST_CHUNK_TIMEOUT_SECONDS (6.5→5.0) and
+  TTS_HEDGE_DELAY_SECONDS (0.85→0.55) to match README performance recommendations
+- backend/.env.example: change DATABASE_URL default to SQLite so new contributors
+  can run the project immediately without provisioning PostgreSQL
+
+Docs:
+- README.md: comprehensive rewrite covering all 15 bug fixes, new API endpoints
+  (/api/sessions/{id}/transcribe, /api/tts/speak, WebSocket routes), updated
+  system architecture diagram, complete API reference table, and change log
+---
+ README.md                          | 228 +++++++++++++----------------
+ backend/.env.example               |   8 +-
+ frontend/src/hooks/useWebSocket.ts |  10 +-
+ 3 files changed, 115 insertions(+), 131 deletions(-)
+
+diff --git a/README.md b/README.md
+index 3d84741..54e21e5 100644
+--- a/README.md
++++ b/README.md
+@@ -24,7 +24,6 @@
+ - TailwindCSS
+ - Radix UI + Lucide Icons
+ - Framer Motion（动画）
+-- Lottie（动画效果）
+ 
+ ### 后端
+ 
+@@ -68,27 +67,40 @@ mock-interview/
+ │
+ ├── backend/                      # FastAPI 后端服务
+ │   ├── app/
+-│   │   ├── api/                  # API 路由（auth, interview, resume, report, behavior）
+-│   │   ├── agents/               # AI Agent（interviewer, resume, verifier, scorer, monitor）
++│   │   ├── api/                  # API 路由
++│   │   │   ├── auth.py           # 注册/登录
++│   │   │   ├── interview.py      # 会话管理
++│   │   │   ├── resume.py         # 简历上传/解析
++│   │   │   ├── report.py         # 面试报告
++│   │   │   ├── behavior.py       # 行为分析
++│   │   │   ├── transcribe.py     # 单次语音转文本（手动录音模式）
++│   │   │   └── tts_metrics.py    # TTS 指标 + /tts/speak 朗读接口
++│   │   ├── agents/               # AI Agent（interviewer, resume, verifier, scorer）
+ │   │   ├── core/                 # 核心配置（安全、限流）
+ │   │   ├── models/               # SQLAlchemy 模型
+-│   │   ├── services/             # 业务服务（STT/TTS/LLM/RAG/Vision）
++│   │   ├── services/             # 业务服务
++│   │   │   ├── audio_utils.py    # 共享音频工具（PCM 重采样，Python 3.13 兼容）
++│   │   │   ├── stt_service.py    # STT 服务（FunASR）
++│   │   │   ├── tts_service.py    # TTS 服务（CosyVoice2）
++│   │   │   └── ...
+ │   │   ├── ws/                   # WebSocket 处理
++│   │   │   ├── interview_ws.py   # 主面试 WebSocket
++│   │   │   ├── stt_ws.py         # 独立 STT WebSocket
++│   │   │   └── tts_ws.py         # 独立 TTS WebSocket
+ │   │   ├── config.py             # 配置管理
+ │   │   ├── schemas.py            # Pydantic 模型
+ │   │   ├── main.py               # 应用入口
+-│   │   └── database.py          # 数据库连接
++│   │   └── database.py           # 数据库连接
+ │   ├── requirements.txt
+ │   ├── Dockerfile
+ │   └── .env.example
+ │
+ ├── docker/                       # Docker 配置文件
+-├── scripts/                       # 辅助脚本
+ ├── docker-compose.yml            # 默认配置
+ ├── docker-compose.gpu.yml        # GPU 部署配置（推荐）
+ ├── docker-compose.dev.yml        # CPU 开发模式
+ ├── CONTRIBUTING.md               # 贡献指南
+-└── LICENSE                      # MIT 许可证
++└── LICENSE                       # MIT 许可证
+ ```
+ 
+ ## 环境要求
+@@ -121,6 +133,7 @@ docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
+ ```bash
+ cp backend/.env.example backend/.env
+ # 编辑 backend/.env，设置 JWT_SECRET 等敏感配置
++# 本地开发默认使用 SQLite，无需配置数据库
+ ```
+ 
+ ### 2. 启动服务（GPU 推荐）
+@@ -151,11 +164,6 @@ docker compose -f docker-compose.gpu.yml ps
+ | 端到端延迟 | ~4秒 | 语音输入 → STT → LLM → TTS → 语音输出 |
+ | 面试会话成功率 | 98% | 含错误恢复的真实完成率 |
+ 
+-| 系统效率 | 数值 |
+-|------|------|
+-| STT 准确率 | 95% (FunASR Paraformer-large) |
+-| TTS 流畅度 | 90% (CosyVoice2 sft) |
+-
+ ## 用户认证
+ 
+ ### 注册账号
+@@ -174,98 +182,67 @@ curl -X POST http://127.0.0.1:8000/api/auth/login \
+   -d '{"email":"you@example.com","password":"yourpassword"}'
+ ```
+ 
+-**响应示例:**
+-
+-```json
+-{
+-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+-  "token_type": "bearer",
+-  "user": {"id": "uuid", "email": "you@example.com"}
+-}
+-```
+-
+ ### WebSocket 连接
+ 
+ ```
+ ws://127.0.0.1:8000/ws/interview/{session_id}?token={access_token}
++ws://127.0.0.1:8000/ws/stt/{session_id}?token={access_token}
++ws://127.0.0.1:8000/ws/tts/{session_id}?token={access_token}
+ ```
+ 
+-## 全链路验证
++## API 接口
+ 
+-运行冒烟测试脚本，验证系统各组件正常工作：
++| 方法 | 路径 | 说明 |
++|------|------|------|
++| POST | `/api/auth/register` | 注册 |
++| POST | `/api/auth/login` | 登录 |
++| POST | `/api/sessions` | 创建会话 |
++| GET | `/api/sessions/{id}` | 查询会话 |
++| PATCH | `/api/sessions/{id}` | 更新会话状态 |
++| POST | `/api/sessions/{id}/resume` | 上传简历 |
++| GET | `/api/sessions/{id}/resume` | 获取简历解析 |
++| POST | `/api/sessions/{id}/report` | 触发报告生成 |
++| GET | `/api/sessions/{id}/report` | 获取面试报告 |
++| POST | `/api/sessions/{id}/behavior` | 提交行为帧数据 |
++| POST | `/api/sessions/{id}/transcribe` | 单次音频转文本（手动录音模式） |
++| POST | `/api/tts/speak` | 文本转语音（返回 WAV 音频） |
++| GET | `/api/tts/metrics` | TTS 性能指标 |
++| GET | `/healthz` | 健康检查 |
++
++## 全链路验证
+ 
+ ```bash
+-# 运行测试
++# 运行冒烟测试
+ docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
+   --artifact-dir /tmp/phase123_run1
+-
+-# 多次运行确保稳定性
+-docker exec mock-interview-backend-1 python -m app.scripts.phase123_smoke \
+-  --artifact-dir /tmp/phase123_run2
+ ```
+ 
+-**验证指标:**
+-
+-| 指标 | 说明 |
+-|------|------|
+-| `resume_status=uploaded` | 简历上传成功 |
+-| `llm_done=true` | LLM 推理完成 |
+-| `tts_chunks > 0` | TTS 音频生成成功 |
+-| `stt_final` 非空 | 语音识别有结果 |
+-| `report_total_score` 存在 | 报告生成成功 |
+-
+-**最近验证结果 (2026-04-21):**
+-
+-| 指标 | 数值 | 说明 |
+-|------|------|------|
+-| LLM 首 token 延迟 | ~0.35s | qwen3:8b 热身后（冷启 ~1.6s） |
+-| TTS 首音频延迟 | 1.5-3.1s | CosyVoice2 流式首包 |
+-| TTS 流式 chunks | 18-22 | 稳定流式输出 |
+-| STT 识别 | 成功 | FunASR 2-pass 高精度 |
+-| 报告总分 | 66-67 | 5维度全面评估 |
+-| 后端单元测试 | 全部通过 | — |
+-
+ ## 测试指南
+ 
+ ### 后端单元测试
+ 
+ ```bash
+-# 在 backend 容器中运行
+ docker exec mock-interview-backend-1 python3 -m pytest app/tests/ -v
+-
+-# 或在本地环境运行（需安装 pytest）
++# 或本地运行（已安装 pytest）
+ cd backend && python3 -m pytest app/tests/ -v
+ ```
+ 
+ ### 前端 E2E 测试 (Playwright)
+ 
+-> ⚠️ 需要系统安装 Playwright 浏览器依赖（libnspr4, libnss3 等）。在无头环境或缺少依赖时请跳过。
+-
+ ```bash
+ cd frontend
+-npx playwright install chromium --with-deps  # 安装浏览器及依赖
+-npx playwright test                           # 运行所有测试
+-npx playwright test --project=chromium         # 仅 Chromium
+-```
+-
+-### 冒烟测试 (E2E)
+-
+-```bash
+-# 在 backend 容器中运行（需先启动所有服务）
+-docker exec mock-interview-backend-1 python3 -m app.scripts.phase123_smoke \
+-  --artifact-dir /tmp/smoke_run --register
++npx playwright install chromium --with-deps
++npx playwright test
+ ```
+ 
+ ### 健康检查
+ 
+ ```bash
+-# 各服务健康状态
+-curl http://127.0.0.1:8000/healthz     # 后端 API
+-curl http://127.0.0.1:11434/api/tags   # Ollama (qwen3:8b)
+-curl http://127.0.0.1:50000/openapi.json # CosyVoice2
+-curl http://127.0.0.1:10095/             # FunASR
+-# 前端
+-curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
++curl http://127.0.0.1:8000/healthz        # 后端 API
++curl http://127.0.0.1:11434/api/tags      # Ollama
++curl http://127.0.0.1:50000/openapi.json  # CosyVoice2
++curl http://127.0.0.1:10095/              # FunASR
++curl http://127.0.0.1:5173/ | head -5     # 前端
+ ```
+ 
+ ## 行为分析
+@@ -278,15 +255,13 @@ curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
+ | 表情分析 | 识别情绪状态（neutral/happy/sad/angry/fear/surprise） |
+ | 姿态稳定性 | 头部倾斜角度与稳定性评估 |
+ 
+-当检测到异常时，系统通过 WebSocket 推送 `behavior_warning` 提示。
+-
+ ## 关键配置
+ 
+ ### 环境变量说明
+ 
+ | 变量 | 说明 | 默认值 |
+ |------|------|--------|
+-| `JWT_SECRET` | JWT 签名密钥（生产环境必设） | - |
++| `JWT_SECRET` | JWT 签名密钥（生产必设） | - |
+ | `DATABASE_URL` | 数据库连接字符串 | sqlite+aiosqlite:///./mock_interview.db |
+ | `LLM_BASE_URL` | Ollama API 地址 | http://localhost:11434/v1 |
+ | `LLM_MODEL` | LLM 模型名称 | qwen3:8b |
+@@ -295,6 +270,7 @@ curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
+ | `COSYVOICE_BASE_URL` | CosyVoice API 地址 | http://127.0.0.1:50000 |
+ | `COSYVOICE_MODE` | TTS 模式 | sft |
+ | `COSYVOICE_SPEED` | 语速 | 1.6 |
++| `CORS_ALLOW_ALL` | 允许所有来源（开发模式） | true |
+ 
+ ### TTS 性能调优
+ 
+@@ -303,48 +279,9 @@ curl http://127.0.0.1:5173/ | head -5   # 应返回 HTML
+ | `COSYVOICE_MODE` | sft | 推荐，稳定可靠 |
+ | `COSYVOICE_SPEED` | 1.6 | 质量优先 |
+ | `TTS_SENTENCE_MAX_CHARS` | 120 | 长句自动切分 |
+-| `TTS_FIRST_CHUNK_TIMEOUT_SECONDS` | 5.0 | 首包超时守卫（已优化） |
+-| `TTS_HEDGE_DELAY_SECONDS` | 0.55 | 对冲延迟（已优化，原 0.85） |
+-| `FIRST_CHUNK_MAX_CHARS` | 50 | 首段最大字符数（已优化，原 26） |
+-
+-### STT 优化 (2026-04-19)
+-
+-| 优化项 | 原值 | 新值 | 效果 |
+-|--------|------|------|------|
+-| TTS 首段字符限制 | 26 | 50 | TTS 首音频提前 |
+-| TTS 对冲延迟 | 0.85s | 0.55s | 更快触发备选 |
+-| TTS 首包超时 | 6.5s | 5.0s | 更灵敏 |
+-
+-### 近期更新 (2026-04-19)
+-
+-**简历支持扩展：**
+-- 新增 DOC/DOCX 格式支持（python-docx）
+-- 简历解析提取更精准，包含姓名、学历、工作经历、项目经验、技能等
+-
+-**面试官 AI 优化：**
+-- 增强面试官人设：专业、亲和、耐心的资深HR形象
+-- 优化提问策略：从基础到深入的渐进式提问（opening→technical→behavioral→closing）
+-- 改善对话语气：自然口语化表达，减少机械感
+-
+-**评估报告优化：**
+-- 5维度评分体系：专业能力、沟通表达、逻辑思维、问题解决、综合素质
+-- 更具体的优缺点点评和可执行改进建议
+-- 评估更客观，基于实际对话内容
+-
+-**性能优化（第二轮 2026-04-19）：**
+-- TTS 首音频延迟进一步降低：1.88s → **1.6-1.7s**
+-- LLM 首 token 极快：**0.35s**（稳定）
+-- 句子分割优化：更积极的早期分割策略
+-- TTS 预热优化：降低冷却时间至 3s，保持服务常热
+-- 移除冗余预检逻辑，减少阻塞
+-
+-**技术细节：**
+-- `_drain_tts_ready_sentences`: 激进分割策略（soft_trigger=3, force_trigger=8）
+-- `_TTS_FIRST_PCM_FLUSH_BYTES`: 96 字节首包，快速音频输出
+-- `_TTS_PREWARM_SESSION_COOLDOWN_SECONDS`: 3s（保持常热）
+-- TTS hedge 策略：启用多速竞争，低延迟触发
+-
+-**注意：** CosyVoice 服务存在固有延迟波动（1.6s-4s），主要由 GPU 负载和模型推理决定。本地部署达到优秀水平。
++| `TTS_FIRST_CHUNK_TIMEOUT_SECONDS` | 5.0 | 首包超时守卫 |
++| `TTS_HEDGE_DELAY_SECONDS` | 0.55 | 对冲延迟 |
++| `FIRST_CHUNK_MAX_CHARS` | 50 | 首段最大字符数 |
+ 
+ ### HTTPS 开发环境
+ 
+@@ -367,12 +304,11 @@ docker compose -f docker-compose.gpu.yml up -d frontend
+                                    │ HTTP + WebSocket
+ ┌──────────────────────────────────▼──────────────────────────────────────┐
+ │                         (FastAPI + Uvicorn)                             │
+-│  /api/auth/*                                                            │         
++│  /api/auth/*                                                            │
+ │  /api/sessions/*                                                        │
+-│  /api/sessions/{id}/resume                                              │
+-│  /api/sessions/{id}/report                                              │
+-│  /api/sessions/{id}/behavior                                            │
+-│  /ws/interview/{id}?token=                                              │
++│  /api/sessions/{id}/resume  /report  /behavior  /transcribe            │
++│  /api/tts/speak  /tts/metrics                                           │
++│  /ws/interview/{id}  /ws/stt/{id}  /ws/tts/{id}                       │
+ └────────┬───────────────┬───────────────────┬────────────────────────────┘
+          │               │                   │
+     ┌────▼─────┐   ┌─────▼─────┐    ┌────────▼────────┐
+@@ -396,14 +332,52 @@ docker compose -f docker-compose.gpu.yml up -d frontend
+ | 创建会话 | 30 次/分钟 |
+ | 行为数据 | 120 次/分钟 |
+ 
++### 添加新题库
++
++在 `knowledge_base/<profession>/` 目录下添加 Markdown 文件，系统会自动加载。
++
+ ### 代码规范
+ 
+-- 提交信息格式：`type(scope): description`
+-- 详细规范见 `CONTRIBUTING.md`
++提交信息格式：`type(scope): description`，详见 `CONTRIBUTING.md`。
+ 
+-### 添加新题库
++## 更新记录
++
++### 2026-04-27（Bug 修复 + 重构）
++
++**修复的关键 Bug（15个）：**
++
++| 严重程度 | 问题 | 修复 |
++|----------|------|------|
++| 🔴 严重 | `useTTSPlayer`: `decodeAudioData` 无法解析 `pcm_s16le` 原始 PCM，TTS 音频从未在浏览器播放 | 手动构建 `AudioBuffer`：`Int16 → Float32 / 32768` |
++| 🔴 严重 | `interview_ws.py` / `stt_ws.py`: `send_json()` 在 `accept()` 之前调用，认证失败时抛出 RuntimeError | 将 `accept()` 移至首行 |
++| 🔴 严重 | `InterviewRoom.tsx`: `currentResponseIdRef` 是普通对象而非 `useRef`，每次渲染重置，响应 ID 追踪失效 | 改为 `useRef('')` |
++| 🔴 严重 | `useManualTTS`: 调用不存在的 `/api/tts/speak` 端点 | 新增 `POST /api/tts/speak` REST 接口，返回 WAV 音频 |
++| 🔴 严重 | `useManualVoiceInput`: 调用不存在的 `/api/sessions/{id}/transcribe` 端点 | 新增 `app/api/transcribe.py` 完整实现 |
++| 🔴 严重 | `stt_ws.py` / `tts_ws.py` 路由从未注册到 `main.py` | 在 `main.py` 注册全部 WebSocket 路由 |
++| 🟠 高 | IDOR 安全漏洞：8 个接口未验证会话所有权 | 提取 `_assert_session_owner()` 并应用至全部端点 |
++| 🟠 高 | `useWebSocket.ts`: `btoa(String.fromCharCode(...new Uint8Array(chunk)))` 对大 buffer 导致栈溢出 | 改为 8192 字节分块循环 |
++| 🟠 高 | `auth.py`: `_loginAttempts` 字典无限增长（内存 DoS） | 加入 5 分钟定期清理机制 |
++| 🟡 中 | `useAudioRecorder.ts`: `AudioContext` 从不关闭，持续泄漏音频硬件资源 | 存入 ref，在 `stop()` 中调用 `.close()` |
++| 🟡 中 | `interview_ws.py`: `_behavior_warning_last_sent` 字典永不清理 | WebSocket 断开时删除对应条目 |
++| 🟡 中 | `interview_ws.py`: 变量名 `payload` 在循环内遮蔽外部 `token_payload` | 重命名为 `msg_payload` |
++| 🟡 中 | `stt_service.py` / `sensevoice_stt_service.py`: 使用已废弃的 `audioop`（Python 3.13 已移除） | 提取 `app/services/audio_utils.py`，纯 Python 线性插值重采样 |
++| 🟡 中 | `report_service.py`: 报告创建/更新路径约 50 行完全重复 | 提取 `_apply_report_fields()` 辅助函数 |
++| 🟡 中 | `main.py`: 缺少 `Content-Security-Policy` 和 `Referrer-Policy` 安全响应头 | 加入两个 header |
++
++**新增内容：**
++- `app/services/audio_utils.py`：共享 PCM 重采样模块，消除重复代码
++- `app/api/transcribe.py`：手动语音转文本 REST 端点（支持 pydub/PyAV/直通三种模式）
++- 后端测试从 13 条增至 21 条，全部通过
++
++### 2026-04-19（优化）
++
++**简历支持扩展：** 新增 DOC/DOCX 格式，简历解析更精准
++
++**面试官 AI 优化：** 增强人设，优化提问策略，改善对话语气
++
++**评估报告优化：** 5 维度评分，更具体的优缺点和改进建议
+ 
+-在 `knowledge_base/<profession>/` 目录下添加 Markdown 文件，系统会自动加载。（注意：需在 `docker-compose.gpu.yml` 中挂载知识库目录）
++**性能优化：** TTS 首音频延迟降低，LLM 首 token 稳定 ~0.35s
+ 
+ ## 许可证
+ 
+diff --git a/backend/.env.example b/backend/.env.example
+index 5c10ade..89d6368 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -61,14 +61,16 @@ TTS_ENABLE_AUTO_PUNCTUATION=true
+ TTS_SENTENCE_MAX_CHARS=120
+ TTS_SENTENCE_SOFT_CHARS=64
+ TTS_REQUEST_TIMEOUT_SECONDS=20
+-TTS_FIRST_CHUNK_TIMEOUT_SECONDS=6.5
++TTS_FIRST_CHUNK_TIMEOUT_SECONDS=5.0
+ TTS_HEDGE_ENABLED=true
+-TTS_HEDGE_DELAY_SECONDS=0.85
++TTS_HEDGE_DELAY_SECONDS=0.55
+ TTS_HEDGE_MAX_RACERS=2
+ TTS_CACHE_DIR=./uploads/tts_cache
+ 
+ # ===== 数据库 =====
+-DATABASE_URL=postgresql+asyncpg://user:password@host:5432/dbname
++# 本地开发默认使用 SQLite，生产环境建议切换 PostgreSQL
++DATABASE_URL=sqlite+aiosqlite:///./mock_interview.db
++# PostgreSQL 示例: DATABASE_URL=postgresql+asyncpg://user:password@host:5432/dbname
+ 
+ # ===== 应用配置 =====
+ CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+diff --git a/frontend/src/hooks/useWebSocket.ts b/frontend/src/hooks/useWebSocket.ts
+index dfc9a99..325ba25 100644
+--- a/frontend/src/hooks/useWebSocket.ts
++++ b/frontend/src/hooks/useWebSocket.ts
+@@ -107,7 +107,15 @@ export function useWebSocket({ sessionId, onMessage }: UseWebSocketOptions) {
+   }, [])
+ 
+   const sendAudioChunk = useCallback((chunk: ArrayBuffer, sampleRate: number) => {
+-    const base64 = btoa(String.fromCharCode(...new Uint8Array(chunk)))
++    // btoa(String.fromCharCode(...new Uint8Array(chunk))) overflows the JS call
++    // stack for large audio buffers. Use a chunked approach instead.
++    const bytes = new Uint8Array(chunk)
++    let binary = ''
++    const CHUNK = 8192
++    for (let i = 0; i < bytes.length; i += CHUNK) {
++      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
++    }
++    const base64 = btoa(binary)
+     return send({ type: 'audio_chunk', data: base64, sample_rate: sampleRate })
+   }, [send])
+ 
+-- 
+2.43.0
+

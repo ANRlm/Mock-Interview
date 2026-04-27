@@ -1,0 +1,12 @@
+{
+  "active": false,
+  "started_at": "2026-04-24T22:41:50.917Z",
+  "original_prompt": "autopilot 将前端部分改回去",
+  "session_id": "fddc69e5-cdd6-4157-8c5c-1d3e5f0890e5",
+  "project_path": "/home/cnhyk/Interview/mock-interview",
+  "reinforcement_count": 4,
+  "awaiting_confirmation": true,
+  "last_checked_at": "2026-04-24T23:07:51.450Z",
+  "cancelled": true,
+  "cancelled_at": "2026-04-25T06:58:00.000Z"
+}

@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu22.04
 
 WORKDIR /app
 
@@ -8,7 +8,11 @@ ENV PIP_NO_CACHE_DIR=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev zlib1g-dev libtiff-dev libopenblas-dev \
-    && rm -rf /var/lib/apt/lists/*
+    python3.11 python3.11-dev python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
+
+RUN pip install --no-cache-dir torch==2.7.1+cu128 torchaudio==2.7.1+cu128 --index-url https://download.pytorch.org/whl/cu128
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt

@@ -32,6 +32,43 @@ async def trigger_report_generation(session_id: UUID) -> str:
     return "pending"
 
 
+def _apply_report_fields(
+    report: "InterviewReport",
+    *,
+    llm_json: dict,
+    dims: dict,
+    overall: float,
+    professional: float,
+    communication: float,
+    logic: float,
+    fluency: dict,
+    behavior_score: float,
+    avg_eye_contact: float,
+    dominant_emotion: str,
+    behavior_detail: dict,
+    total_score: float,
+) -> None:
+    """Apply all computed fields to a report object (create or update path)."""
+    report.llm_overall_score = overall
+    report.llm_professional_score = professional
+    report.llm_communication_score = communication
+    report.llm_logic_score = logic
+    report.llm_evaluation_text = str(llm_json.get("overall_evaluation", "综合表现良好。"))
+    report.strengths = [str(item) for item in llm_json.get("strengths", [])]
+    report.improvements = [str(item) for item in llm_json.get("improvements", [])]
+    report.fluency_score = float(fluency["fluency_score"])
+    report.speech_rate_wpm = float(fluency["speech_rate_wpm"])
+    report.filler_word_ratio = float(fluency["filler_word_ratio"])
+    report.pause_frequency = float(fluency["pause_frequency"])
+    report.fluency_detail = fluency["detail"]
+    report.behavior_score = behavior_score
+    report.avg_eye_contact = avg_eye_contact
+    report.dominant_emotion = dominant_emotion
+    report.behavior_detail = behavior_detail
+    report.total_score = total_score
+    report.generated_at = datetime.now(timezone.utc)
+
+
 async def _generate_report(session_id: UUID) -> None:
     try:
         async with AsyncSessionLocal() as db:
@@ -115,77 +152,39 @@ async def _generate_report(session_id: UUID) -> None:
                 2,
             )
 
+            behavior_detail_dict = {
+                "sample_count": len(behavior_logs),
+                "emotion_distribution": _emotion_distribution(emotions),
+                "attention_score": behavior_summary.attention_score,
+                "posture_score": behavior_summary.posture_score,
+                "engagement_score": behavior_summary.engagement_score,
+                "gaze_stability": behavior_summary.gaze_stability,
+                "emotion_confidence": behavior_summary.emotion_confidence,
+                "recommendations": behavior_summary.recommendations,
+            }
+
             report = await db.scalar(
                 select(InterviewReport).where(InterviewReport.session_id == session_id)
             )
             if report is None:
-                report = InterviewReport(
-                    session_id=session_id,
-                    llm_overall_score=overall,
-                    llm_professional_score=professional,
-                    llm_communication_score=communication,
-                    llm_logic_score=logic,
-                    llm_evaluation_text=str(
-                        llm_json.get("overall_evaluation", "综合表现良好。")
-                    ),
-                    strengths=[str(item) for item in llm_json.get("strengths", [])],
-                    improvements=[
-                        str(item) for item in llm_json.get("improvements", [])
-                    ],
-                    fluency_score=float(fluency["fluency_score"]),
-                    speech_rate_wpm=float(fluency["speech_rate_wpm"]),
-                    filler_word_ratio=float(fluency["filler_word_ratio"]),
-                    pause_frequency=float(fluency["pause_frequency"]),
-                    fluency_detail=fluency["detail"],
-                    behavior_score=behavior_score,
-                    avg_eye_contact=avg_eye_contact,
-                    dominant_emotion=dominant_emotion,
-                    behavior_detail={
-                        "sample_count": len(behavior_logs),
-                        "emotion_distribution": _emotion_distribution(emotions),
-                        "attention_score": behavior_summary.attention_score,
-                        "posture_score": behavior_summary.posture_score,
-                        "engagement_score": behavior_summary.engagement_score,
-                        "gaze_stability": behavior_summary.gaze_stability,
-                        "emotion_confidence": behavior_summary.emotion_confidence,
-                        "recommendations": behavior_summary.recommendations,
-                    },
-                    total_score=total_score,
-                    generated_at=datetime.now(timezone.utc),
-                )
+                report = InterviewReport(session_id=session_id)
                 db.add(report)
-            else:
-                report.llm_overall_score = overall
-                report.llm_professional_score = professional
-                report.llm_communication_score = communication
-                report.llm_logic_score = logic
-                report.llm_evaluation_text = str(
-                    llm_json.get("overall_evaluation", "综合表现良好。")
-                )
-                report.strengths = [str(item) for item in llm_json.get("strengths", [])]
-                report.improvements = [
-                    str(item) for item in llm_json.get("improvements", [])
-                ]
-                report.fluency_score = float(fluency["fluency_score"])
-                report.speech_rate_wpm = float(fluency["speech_rate_wpm"])
-                report.filler_word_ratio = float(fluency["filler_word_ratio"])
-                report.pause_frequency = float(fluency["pause_frequency"])
-                report.fluency_detail = fluency["detail"]
-                report.behavior_score = behavior_score
-                report.avg_eye_contact = avg_eye_contact
-                report.dominant_emotion = dominant_emotion
-                report.behavior_detail = {
-                    "sample_count": len(behavior_logs),
-                    "emotion_distribution": _emotion_distribution(emotions),
-                    "attention_score": behavior_summary.attention_score,
-                    "posture_score": behavior_summary.posture_score,
-                    "engagement_score": behavior_summary.engagement_score,
-                    "gaze_stability": behavior_summary.gaze_stability,
-                    "emotion_confidence": behavior_summary.emotion_confidence,
-                    "recommendations": behavior_summary.recommendations,
-                }
-                report.total_score = total_score
-                report.generated_at = datetime.now(timezone.utc)
+
+            _apply_report_fields(
+                report,
+                llm_json=llm_json,
+                dims=dims,
+                overall=overall,
+                professional=professional,
+                communication=communication,
+                logic=logic,
+                fluency=fluency,
+                behavior_score=behavior_score,
+                avg_eye_contact=avg_eye_contact,
+                dominant_emotion=dominant_emotion,
+                behavior_detail=behavior_detail_dict,
+                total_score=total_score,
+            )
 
             await db.commit()
     except Exception as exc:

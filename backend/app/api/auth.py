@@ -15,10 +15,22 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Simple IP-based rate limiting for login (5 attempts per minute per IP)
 _loginAttempts: dict[str, list[float]] = defaultdict(list)
+_LOGIN_CLEANUP_INTERVAL = 300  # clean up stale entries every 5 minutes
+_last_cleanup_at: float = 0.0
+
 
 def _check_rate_limit(ip: str, max_attempts: int = 5, window: int = 60) -> None:
+    global _last_cleanup_at
     now = time.time()
-    # Clean old entries
+
+    # Periodically purge stale IPs to prevent unbounded memory growth
+    if now - _last_cleanup_at > _LOGIN_CLEANUP_INTERVAL:
+        _last_cleanup_at = now
+        stale_ips = [k for k, v in list(_loginAttempts.items()) if not any(now - t < window for t in v)]
+        for ip_key in stale_ips:
+            _loginAttempts.pop(ip_key, None)
+
+    # Clean old entries for this IP
     _loginAttempts[ip] = [t for t in _loginAttempts[ip] if now - t < window]
     if len(_loginAttempts[ip]) >= max_attempts:
         raise HTTPException(

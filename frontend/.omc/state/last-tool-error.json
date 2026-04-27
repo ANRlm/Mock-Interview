@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"sudo rm -rf /home/cnhyk/Interview/mock-interview/frontend/dist 2>&1\",\"description\":\"Remove dist with sudo\"}",
+  "error": "Exit code 1\nsudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper\nsudo: a password is required",
+  "timestamp": "2026-04-24T22:45:05.152Z",
+  "retry_count": 1
+}

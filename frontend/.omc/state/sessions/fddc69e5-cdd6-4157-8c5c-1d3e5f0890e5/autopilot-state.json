@@ -1,0 +1,10 @@
+{
+  "active": true,
+  "started_at": "2026-04-24T22:49:49.922Z",
+  "original_prompt": "autopilot 是的，并且一并修复所有其他问题",
+  "session_id": "fddc69e5-cdd6-4157-8c5c-1d3e5f0890e5",
+  "project_path": "/home/cnhyk/Interview/mock-interview/frontend",
+  "reinforcement_count": 0,
+  "awaiting_confirmation": true,
+  "last_checked_at": "2026-04-24T22:49:49.922Z"
+}

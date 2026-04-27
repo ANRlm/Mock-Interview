@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     LLM_BASE_URL: str = "http://localhost:11434/v1"
     LLM_API_KEY: str = "ollama"
-    LLM_MODEL: str = "qwen3:8b"
+    LLM_MODEL: str = "qwen3:14b"
     LLM_TIMEOUT_SECONDS: int = 90
     LLM_DISABLE_THINKING: bool = True
     LLM_DEFAULT_PROFILE: str = "local"
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     CLOUD_LLM_TIMEOUT_SECONDS: int = 90
     CLOUD_LLM_DISABLE_THINKING: bool = False
 
-    STT_BACKEND: str = "funasr-http"
+    STT_BACKEND: str = "paraformer-streaming"
     FUNASR_BASE_URL: str = "http://127.0.0.1:10095"
     FUNASR_HEALTH_PATH: str = "/healthz"
     FUNASR_TIMEOUT_SECONDS: int = 20
@@ -57,7 +57,14 @@ class Settings(BaseSettings):
     SENSEVOICE_API_KEY: str = ""
     SENSEVOICE_TIMEOUT_SECONDS: int = 20
 
-    TTS_BACKEND: str = "cosyvoice2-http"
+    VAD_MODEL: str = "silero"
+    VAD_HANGOVER_MS: int = 300
+    VAD_THRESHOLD: float = 0.5
+
+    PARAFORMER_BASE_URL: str = "http://127.0.0.1:10095"
+    PARAFORMER_CHUNK_SIZE_MS: int = 600
+
+    TTS_BACKEND: str = "qwen3-tts"
     COSYVOICE_BASE_URL: str = "http://127.0.0.1:50000"
     COSYVOICE_TTS_PATH: str = "/inference_sft"
     COSYVOICE_HEALTH_PATH: str = "/openapi.json"
@@ -85,6 +92,23 @@ class Settings(BaseSettings):
     TTS_HEDGE_DELAY_SECONDS: float = 0.55
     TTS_HEDGE_MAX_RACERS: int = 2
 
+    # Latency budgets (NEW)
+    STT_MAX_LATENCY_MS: int = 600
+    TTS_MAX_LATENCY_MS: int = 200
+    E2E_MAX_LATENCY_MS: int = 2000
+
+    # Echo cancellation (NEW)
+    ECHO_CANCELLATION_ENABLED: bool = True
+
+    # TTS routing (NEW)
+    TTS_PRIMARY: str = "qwen3-tts"
+    TTS_FALLBACK: str = "f5-tts"
+    TTS_LAST_RESORT: str = "cosyvoice2"
+
+    QWEN_TTS_BASE_URL: str = "http://127.0.0.1:50001"
+    QWEN_TTS_MODEL: str = "qwen3-tts"
+    QWEN_TTS_TIMEOUT_SECONDS: int = 20
+
     TTS_CACHE_DIR: str = "./uploads/tts_cache"
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./mock_interview.db"
@@ -97,6 +121,18 @@ class Settings(BaseSettings):
     VISION_SAMPLE_INTERVAL: int = 5
 
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
+
+    # VRAM budget (RTX 5080 16GB)
+    VRAM_BUDGET_MB: int = 16384
+    VRAM_LLM_MB: int = 12288
+    VRAM_TTS_MB: int = 2048
+    VRAM_STT_MB: int = 1024
+
+    # Concurrency settings
+    MAX_STT_WORKERS: int = 2
+    MAX_TTS_WORKERS: int = 2
+    MAX_LLM_STREAMS: int = 4
+    MAX_CONCURRENT_SESSIONS: int = 4
 
     @property
     def cors_origins(self) -> list[str]:
