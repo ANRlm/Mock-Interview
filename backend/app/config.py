@@ -87,9 +87,9 @@ class Settings(BaseSettings):
     TTS_SENTENCE_MAX_CHARS: int = 120
     TTS_SENTENCE_SOFT_CHARS: int = 64
     TTS_REQUEST_TIMEOUT_SECONDS: float = 20.0
-    TTS_FIRST_CHUNK_TIMEOUT_SECONDS: float = 5.0
+    TTS_FIRST_CHUNK_TIMEOUT_SECONDS: float = 4.0
     TTS_HEDGE_ENABLED: bool = True
-    TTS_HEDGE_DELAY_SECONDS: float = 0.55
+    TTS_HEDGE_DELAY_SECONDS: float = 0.3
     TTS_HEDGE_MAX_RACERS: int = 2
 
     # Latency budgets (NEW)
@@ -129,10 +129,10 @@ class Settings(BaseSettings):
     VRAM_STT_MB: int = 1024
 
     # Concurrency settings
-    MAX_STT_WORKERS: int = 2
-    MAX_TTS_WORKERS: int = 2
-    MAX_LLM_STREAMS: int = 4
-    MAX_CONCURRENT_SESSIONS: int = 4
+    MAX_STT_WORKERS: int = 8
+    MAX_TTS_WORKERS: int = 8
+    MAX_LLM_STREAMS: int = 16
+    MAX_CONCURRENT_SESSIONS: int = 16
 
     @property
     def cors_origins(self) -> list[str]:

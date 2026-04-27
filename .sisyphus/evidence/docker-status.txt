@@ -1,0 +1,17 @@
+Docker Status Check - Mon Apr 27 2026
+
+ERROR: Docker is not available in this environment.
+
+Docker command was not recognized. This may indicate:
+- Docker is not installed
+- Docker daemon is not running
+- Docker is not in the system PATH
+
+Expected services (not checked):
+- backend
+- frontend
+- ollama
+- cosyvoice
+- funasr
+
+Note: Docker container status could not be verified.

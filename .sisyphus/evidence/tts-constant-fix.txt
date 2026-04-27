@@ -1,0 +1,10 @@
+﻿
+\\wsl.localhost\Ubuntu\home\cnhyk\Interview\mock-interview\backend\app\ws\interview_ws.py:39:_TTS_FIRST_PCM_FLUSH_BYTES
+ = 96
+\\wsl.localhost\Ubuntu\home\cnhyk\Interview\mock-interview\backend\app\ws\interview_ws.py:420:                threshold
+ = _TTS_FIRST_PCM_FLUSH_BYTES if not first_flush_sent else _TTS_PCM_FLUSH_BYTES
+\\wsl.localhost\Ubuntu\home\cnhyk\Interview\mock-interview\backend\app\ws\tts_ws.py:30:_TTS_FIRST_PCM_FLUSH_BYTES = 96
+\\wsl.localhost\Ubuntu\home\cnhyk\Interview\mock-interview\backend\app\ws\tts_ws.py:198:            threshold = _TTS_FI
+RST_PCM_FLUSH_BYTES if not first_audio_sent else _TTS_PCM_FLUSH_BYTES
+
+

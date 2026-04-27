@@ -1,0 +1,173 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/cnhyk/Interview/mock-interview/backend
+plugins: asyncio-1.3.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 33 items
+
+app/tests/test_full_pipeline.py::test_full_pipeline_integration FAILED   [  3%]
+app/tests/test_full_pipeline.py::test_vram_manager_integration PASSED    [  6%]
+app/tests/test_full_pipeline.py::test_streaming_coordinator_integration PASSED [  9%]
+app/tests/test_full_pipeline.py::test_pipeline_config_defaults PASSED    [ 12%]
+app/tests/test_full_pipeline.py::test_paraformer_stt_service_initialization PASSED [ 15%]
+app/tests/test_full_pipeline.py::test_qwen_tts_service_initialization PASSED [ 18%]
+app/tests/test_full_pipeline.py::test_vram_manager_check_available PASSED [ 21%]
+app/tests/test_full_pipeline.py::test_streaming_coordinator_queues PASSED [ 24%]
+app/tests/test_interview_ws_exception.py::TestInterviewWSTTSPreflightException::test_tts_preflight_exception_uses_logger_warning FAILED [ 27%]
+app/tests/test_interview_ws_exception.py::TestInterviewWSTTSPreflightException::test_tts_preflight_exception_log_message_format FAILED [ 30%]
+app/tests/test_interview_ws_exception.py::TestTTSServiceCancelCandidates::test_cancel_candidates_re_raises_cancelled_error PASSED [ 33%]
+app/tests/test_interview_ws_exception.py::TestTTSServiceCancelCandidates::test_cancel_candidates_logs_other_exceptions PASSED [ 36%]
+app/tests/test_new_fixes.py::TestAssertSessionOwner::test_raises_404_when_session_is_none FAILED [ 39%]
+app/tests/test_new_fixes.py::TestAssertSessionOwner::test_raises_403_when_different_owner FAILED [ 42%]
+app/tests/test_new_fixes.py::TestAssertSessionOwner::test_returns_session_when_owner_matches FAILED [ 45%]
+app/tests/test_new_fixes.py::TestResamplePcm::test_same_rate_returns_unchanged_bytes PASSED [ 48%]
+app/tests/test_new_fixes.py::TestResamplePcm::test_downsamples_correctly PASSED [ 51%]
+app/tests/test_new_fixes.py::TestResamplePcm::test_empty_input_returns_empty PASSED [ 54%]
+app/tests/test_new_fixes.py::TestResamplePcm::test_upsample_doubles_samples PASSED [ 57%]
+app/tests/test_new_fixes.py::TestResamplePcm::test_output_is_valid_s16le PASSED [ 60%]
+app/tests/test_rag_kb.py::TestKnowledgeBaseLoading::test_kb_directory_exists_for_all_roles PASSED [ 63%]
+app/tests/test_rag_kb.py::TestKnowledgeBaseLoading::test_each_role_has_minimum_markdown_files PASSED [ 66%]
+app/tests/test_rag_kb.py::TestKnowledgeBaseLoading::test_each_markdown_file_has_content PASSED [ 69%]
+app/tests/test_rag_kb.py::TestKnowledgeBaseLoading::test_each_markdown_file_contains_keywords PASSED [ 72%]
+app/tests/test_rag_kb.py::TestKnowledgeBaseLoading::test_search_returns_non_empty_results PASSED [ 75%]
+app/tests/test_sensevoice_stt_exception.py::TestSenseVoiceSTTException::test_health_check_failure_is_logged PASSED [ 78%]
+app/tests/test_sensevoice_stt_exception.py::TestSenseVoiceSTTException::test_docs_endpoint_check_failure_is_logged PASSED [ 81%]
+app/tests/test_stt_latency.py::test_paraformer_streaming_latency PASSED  [ 84%]
+app/tests/test_stt_latency.py::test_vad_speech_detection FAILED          [ 87%]
+app/tests/test_tts_latency.py::test_qwen_tts_first_chunk_latency SKIPPED [ 90%]
+app/tests/test_tts_latency.py::test_f5_tts_fallback_latency SKIPPED      [ 93%]
+app/tests/test_tts_service_exception.py::TestTTSServiceCancelCandidates::test_cancel_candidates_re_raises_cancelled_error PASSED [ 96%]
+app/tests/test_tts_service_exception.py::TestTTSServiceCancelCandidates::test_cancel_candidates_logs_other_exceptions PASSED [100%]
+
+=================================== FAILURES ===================================
+________________________ test_full_pipeline_integration ________________________
+app/tests/test_full_pipeline.py:13: in test_full_pipeline_integration
+    from app.agents.interviewer_agent import InterviewerAgent
+app/agents/__init__.py:1: in <module>
+    from .interviewer_agent import InterviewerAgent
+app/agents/interviewer_agent.py:7: in <module>
+    from app.models.session import JobRole
+app/models/__init__.py:1: in <module>
+    from .behavior_log import BehaviorLog
+app/models/behavior_log.py:9: in <module>
+    from app.database import Base
+app/database.py:25: in <module>
+    engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/engine.py:120: in create_async_engine
+    sync_engine = _create_engine(url, **kw)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:2: in create_engine
+    ???
+../../../.local/lib/python3.12/site-packages/sqlalchemy/util/deprecations.py:281: in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/engine/create.py:617: in create_engine
+    dbapi = dbapi_meth(**dbapi_args)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1094: in import_dbapi
+    return AsyncAdapt_asyncpg_dbapi(__import__("asyncpg"))
+                                    ^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'asyncpg'
+_ TestInterviewWSTTSPreflightException.test_tts_preflight_exception_uses_logger_warning _
+app/tests/test_interview_ws_exception.py:65: in test_tts_preflight_exception_uses_logger_warning
+    assert not visitor.has_bare_pass, (
+E   AssertionError: The except clause should not use bare 'pass'. It should log the exception with logger.warning.
+E   assert not True
+E    +  where True = <app.tests.test_interview_ws_exception.TestInterviewWSTTSPreflightException.test_tts_preflight_exception_uses_logger_warning.<locals>.TTSPreflightVisitor object at 0x7cb931732c00>.has_bare_pass
+_ TestInterviewWSTTSPreflightException.test_tts_preflight_exception_log_message_format _
+app/tests/test_interview_ws_exception.py:105: in test_tts_preflight_exception_log_message_format
+    assert found_tts_preflight_message, (
+E   AssertionError: The log message should indicate TTS preflight failure. Found messages: ['TTS stream failed text_len=%s error=%s', 'TTS emit failed text_len=%s error=%s', 'Behavior frame analysis failed session=%s: %s']
+E   assert False
+_________ TestAssertSessionOwner.test_raises_404_when_session_is_none __________
+app/tests/test_new_fixes.py:15: in test_raises_404_when_session_is_none
+    from app.api.interview import _assert_session_owner
+app/api/interview.py:10: in <module>
+    from app.api.dependencies import get_current_user
+app/api/dependencies.py:11: in <module>
+    from app.database import AsyncSessionLocal, get_db
+app/database.py:25: in <module>
+    engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/engine.py:120: in create_async_engine
+    sync_engine = _create_engine(url, **kw)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:2: in create_engine
+    ???
+../../../.local/lib/python3.12/site-packages/sqlalchemy/util/deprecations.py:281: in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/engine/create.py:617: in create_engine
+    dbapi = dbapi_meth(**dbapi_args)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1094: in import_dbapi
+    return AsyncAdapt_asyncpg_dbapi(__import__("asyncpg"))
+                                    ^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'asyncpg'
+_________ TestAssertSessionOwner.test_raises_403_when_different_owner __________
+app/tests/test_new_fixes.py:25: in test_raises_403_when_different_owner
+    from app.api.interview import _assert_session_owner
+app/api/interview.py:10: in <module>
+    from app.api.dependencies import get_current_user
+app/api/dependencies.py:11: in <module>
+    from app.database import AsyncSessionLocal, get_db
+app/database.py:25: in <module>
+    engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/engine.py:120: in create_async_engine
+    sync_engine = _create_engine(url, **kw)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:2: in create_engine
+    ???
+../../../.local/lib/python3.12/site-packages/sqlalchemy/util/deprecations.py:281: in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/engine/create.py:617: in create_engine
+    dbapi = dbapi_meth(**dbapi_args)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1094: in import_dbapi
+    return AsyncAdapt_asyncpg_dbapi(__import__("asyncpg"))
+                                    ^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'asyncpg'
+________ TestAssertSessionOwner.test_returns_session_when_owner_matches ________
+app/tests/test_new_fixes.py:38: in test_returns_session_when_owner_matches
+    from app.api.interview import _assert_session_owner
+app/api/interview.py:10: in <module>
+    from app.api.dependencies import get_current_user
+app/api/dependencies.py:11: in <module>
+    from app.database import AsyncSessionLocal, get_db
+app/database.py:25: in <module>
+    engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/engine.py:120: in create_async_engine
+    sync_engine = _create_engine(url, **kw)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:2: in create_engine
+    ???
+../../../.local/lib/python3.12/site-packages/sqlalchemy/util/deprecations.py:281: in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/engine/create.py:617: in create_engine
+    dbapi = dbapi_meth(**dbapi_args)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1094: in import_dbapi
+    return AsyncAdapt_asyncpg_dbapi(__import__("asyncpg"))
+                                    ^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'asyncpg'
+__________________________ test_vad_speech_detection ___________________________
+app/tests/test_stt_latency.py:30: in test_vad_speech_detection
+    assert event_speech.speech_detected == True, "Should detect speech in high-energy PCM"
+E   AssertionError: Should detect speech in high-energy PCM
+E   assert False == True
+E    +  where False = VADEvent(speech_detected=False, confidence=0.002, timestamp=0.0).speech_detected
+=========================== short test summary info ============================
+FAILED app/tests/test_full_pipeline.py::test_full_pipeline_integration - Modu...
+FAILED app/tests/test_interview_ws_exception.py::TestInterviewWSTTSPreflightException::test_tts_preflight_exception_uses_logger_warning
+FAILED app/tests/test_interview_ws_exception.py::TestInterviewWSTTSPreflightException::test_tts_preflight_exception_log_message_format
+FAILED app/tests/test_new_fixes.py::TestAssertSessionOwner::test_raises_404_when_session_is_none
+FAILED app/tests/test_new_fixes.py::TestAssertSessionOwner::test_raises_403_when_different_owner
+FAILED app/tests/test_new_fixes.py::TestAssertSessionOwner::test_returns_session_when_owner_matches
+FAILED app/tests/test_stt_latency.py::test_vad_speech_detection - AssertionEr...
+=================== 7 failed, 24 passed, 2 skipped in 0.72s ====================

@@ -52,7 +52,7 @@ export function useAudioRecorder({ enabled = false, onChunk }: UseAudioRecorderO
         chunksRef.current = []
       }
 
-      recorder.start(100)
+      recorder.start(50)
       setIsRecording(true)
 
       const updateLevel = () => {

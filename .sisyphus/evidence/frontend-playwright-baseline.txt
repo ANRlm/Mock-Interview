@@ -1,0 +1,60 @@
+﻿# Frontend Playwright E2E Baseline - Mon Apr 27 2026
+
+## Environment Issue
+
+**Status: CANNOT RUN**
+
+### Root Cause
+The shell environment's working directory is set to a UNC path
+(`\\wsl.localhost\Ubuntu\home\cnhyk\Interview\mock-interview`) which is not
+properly supported by:
+
+1. CMD.exe - Does not support UNC paths as current directory
+2. Node.js/npm - Module resolution fails on UNC paths
+3. Playwright Test Runner - Cannot read config or find tests via UNC paths
+
+### Technical Details
+- Working directory: `\\wsl.localhost\Ubuntu\home\cnhyk\Interview\mock-interview`
+- Node version: v24.15.0
+- Playwright version: 1.59.1 (via npx)
+
+### Attempted Solutions (All Failed)
+1. Using `pushd` to map UNC to drive letter - CMD still uses UNC internally
+2. Setting `NODE_PATH` to frontend/node_modules - Path resolution broken
+3. Creating local config files - @playwright/test version mismatch
+4. Using absolute UNC paths in config - Path concatenation errors
+5. Running via `cmd /c` - Inherits UNC working directory issue
+
+### Additional Blockers
+- **Docker not available** - E2E tests require backend/frontend services
+- Docker status check returned: "Docker is not available in this environment"
+
+## Test Information
+
+### Tests Available
+Location: `frontend/tests/smoke.spec.ts`
+
+**3 tests defined:**
+1. `homepage loads without errors` - Verifies homepage loads with correct title
+2. `login page loads` - Verifies login form elements are visible
+3. `theme toggle works` - Verifies light/dark mode switching
+
+### Test Requirements
+- Frontend dev server running at http://localhost:5173
+- No authentication required for smoke tests
+
+## Recommendations
+
+To run E2E tests, execute from a proper shell environment:
+
+```bash
+cd /home/cnhyk/Interview/mock-interview/frontend
+npx playwright test --reporter=line
+```
+
+Or if Docker is available:
+
+```bash
+docker compose -f docker-compose.gpu.yml up -d
+docker exec mock-interview-frontend-1 npx playwright test
+```

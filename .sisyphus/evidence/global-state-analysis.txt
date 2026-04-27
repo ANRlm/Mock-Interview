@@ -1,0 +1,68 @@
+# _LAST_TTS_PREWARM_AT Global State Analysis
+
+**Date**: 2026-04-27
+**File**: backend/app/ws/interview_ws.py
+**Lines**: 46, 363-368
+
+## Variable Definition
+
+```python
+_TTS_PREWARM_SESSION_COOLDOWN_SECONDS = 3.0
+_LAST_TTS_PREWARM_AT = 0.0
+```
+
+## Usage
+
+In `_handle_candidate_text` (line 363-368):
+
+```python
+global _LAST_TTS_PREWARM_AT
+now = time.perf_counter()
+if now - _LAST_TTS_PREWARM_AT >= _TTS_PREWARM_SESSION_COOLDOWN_SECONDS:
+    _LAST_TTS_PREWARM_AT = now
+    with suppress(Exception):
+        await tts_service.warmup_if_needed()
+```
+
+## Analysis
+
+### Purpose
+Implements a global cooldown (3 seconds) to prevent excessive TTS prewarming calls.
+
+### Is this a real bug?
+
+**NO - Theoretical risk only. No fix needed.**
+
+### Reasoning
+
+1. **Multi-worker deployments**: Each uvicorn worker process has its own copy of `_LAST_TTS_PREWARM_AT`. Worst case: slightly more frequent prewarming. The system remains functionally correct.
+
+2. **Memory leak**: False concern. `_LAST_TTS_PREWARM_AT` is a single float, not a growing collection. No memory leak.
+
+3. **Session isolation**: The cooldown is intentionally GLOBAL, not per-session. This is correct - the goal is to rate-limit prewarming across the entire application, not per-user.
+
+4. **Reset mechanism**: The variable is NEVER reset to 0.0, but this is correct design:
+   - Check: `now - _LAST_TTS_PREWARM_AT >= 3.0`
+   - This is a sliding window: once set, the next prewarm can only happen 3+ seconds later
+   - No reset needed
+
+5. **Observable behavior**:
+   - First call after startup: `_LAST_TTS_PREWARM_AT` = 0.0, `now - 0 >= 3.0` is typically true (if startup took >3s), prewarm happens
+   - Subsequent calls within 3 seconds: prewarm skipped
+   - Calls after 3 seconds: prewarm happens again
+
+### Worst Case Scenarios
+
+| Scenario | Impact |
+|----------|--------|
+| Single worker, rapid calls | Cooldown works correctly |
+| Multiple workers | Workers may prewarm independently (harmless - TTS service handles duplicate requests) |
+| Long idle (>3s gap) | TTS prewarmed before next interaction (correct behavior) |
+
+## Conclusion
+
+**Status**: ACCEPTABLE - No fix needed
+
+This is a well-designed global rate-limiter. The global state is intentional, not a bug. Multi-worker "duplication" is harmless since TTS prewarming is idempotent (calling twice doesn't break anything, just wastes minimal resources).
+
+**No observable bugs caused by this global state.**
