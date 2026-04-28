@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     LLM_INTERVIEW_RAG_MAX_CHARS: int = 520
     LLM_INTERVIEW_RAG_CHUNK_MAX_CHARS: int = 220
 
+    # llama.cpp CUDA settings
+    LLAMA_MODEL_PATH: str = ""
+    LLAMA_N_CTX: int = 8192
+    LLAMA_N_GPU_LAYERS: int = 35
+    LLAMA_N_THREADS: int = 8
+    LLAMA_N_BATCH: int = 512
+    LLAMA_MODEL_QUANT: str = "q4_k_m"
+    LLAMA_FLASH_ATTENTION: bool = True
+
     CLOUD_LLM_ENABLED: bool = False
     CLOUD_LLM_BASE_URL: str = ""
     CLOUD_LLM_API_KEY: str = ""
@@ -52,6 +61,12 @@ class Settings(BaseSettings):
     FUNASR_TIMEOUT_SECONDS: int = 20
     FUNASR_USE_ITN: bool = True
     FUNASR_EXTRA_PAYLOAD: str = "{}"
+
+    # Faster-Whisper CUDA settings
+    WHISPER_MODEL_SIZE: str = "large-v3"
+    WHISPER_DEVICE: str = "cuda"
+    WHISPER_COMPUTE_TYPE: str = "float16"
+    WHISPER_DOWNLOAD_ROOT: str = ""
 
     SENSEVOICE_BASE_URL: str = "http://127.0.0.1:5001"
     SENSEVOICE_API_KEY: str = ""
@@ -127,6 +142,7 @@ class Settings(BaseSettings):
     VRAM_LLM_MB: int = 12288
     VRAM_TTS_MB: int = 2048
     VRAM_STT_MB: int = 1024
+    VRAM_WHISPER_MB: int = 2048  # Added for Faster-Whisper
 
     # Concurrency settings
     MAX_STT_WORKERS: int = 8

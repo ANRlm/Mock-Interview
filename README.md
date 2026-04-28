@@ -155,14 +155,59 @@ docker compose -f docker-compose.gpu.yml ps
 
 ### 4. 性能指标
 
-本项目在 **RTX 5080 Laptop (16GB VRAM)** + **qwen3:8b** 环境下实测性能：
+本项目支持两种运行模式：**CUDA 加速模式**（本地 GPU）和 **HTTP 回退模式**（Ollama/CosyVoice2）。
+
+#### CUDA 加速模式
+
+在 **RTX 5080 Laptop (16GB VRAM)** 环境下，使用 `faster_whisper`、`llama.cpp` 和 `Coqui XTTS` 的目标性能：
+
+| 指标 | 目标 | 说明 |
+|------|------|------|
+| STT 延迟 | <200ms | faster-whisper 端到端延迟 |
+| LLM 首 token 延迟 | <100ms | llama.cpp GPU 加速 |
+| TTS 首音频延迟 | <500ms | Coqui XTTS 本地合成 |
+| 端到端延迟 | <1.5s | 语音输入 → STT → LLM → TTS → 语音输出 |
+| 面试会话成功率 | 98% | 含错误恢复的真实完成率 |
+
+#### HTTP 回退模式
+
+基于 Ollama + CosyVoice2 HTTP API 的性能（需外部服务）：
 
 | 指标 | 数值 | 说明 |
 |------|------|------|
 | LLM 首 token 延迟 | ~0.33秒 | qwen3:8b 热身后 330ms（冷启 ~1.5s） |
 | TTS 首音频延迟 | ~1.5-2.8秒 | CosyVoice2 sft 模式流式首包 |
 | 端到端延迟 | ~4秒 | 语音输入 → STT → LLM → TTS → 语音输出 |
-| 面试会话成功率 | 98% | 含错误恢复的真实完成率 |
+
+#### CUDA 加速架构
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         本地 CUDA 加速服务                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│  STT: faster_whisper_stt_service.py   (faster-whisper + CUDA)          │
+│  LLM: llama_cpp_llm_service.py        (llama.cpp + CUDA)               │
+│  TTS: coqui_xtts_service.py           (Coqui XTTS + CUDA)             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 新增服务文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/services/faster_whisper_stt_service.py` | Faster-Whisper STT 服务，本地 CUDA 加速 |
+| `backend/app/services/llama_cpp_llm_service.py` | llama.cpp LLM 服务，本地 GPU 推理 |
+| `backend/app/services/coqui_xtts_service.py` | Coqui XTTS TTS 服务，本地语音合成 |
+
+#### 配置文件新增选项
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `WHISPER_MODEL_SIZE` | Faster-Whisper 模型大小 | base |
+| `WHISPER_DEVICE` | STT 设备 | cuda |
+| `LLAMA_N_GPU_LAYERS` | GPU 加速层数 | 全部 |
+| `LLAMA_N_CTX` | LLM 上下文窗口大小 | 2048 |
+| `LLAMA_FLASH_ATTENTION` | 启用 Flash Attention | true |
 
 ## 用户认证
 

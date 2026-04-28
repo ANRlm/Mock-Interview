@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir torch==2.7.1+cu128 torchaudio==2.7.1+cu128 --index-url https://download.pytorch.org/whl/cu128
 
+RUN pip install --no-cache-dir faster-whisper llama-cpp-python TTS
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 

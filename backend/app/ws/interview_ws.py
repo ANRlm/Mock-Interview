@@ -46,6 +46,11 @@ _TTS_PREWARM_SESSION_COOLDOWN_SECONDS = 1.0
 _LAST_TTS_PREWARM_AT = 0.0
 _TTS_MAX_CONCURRENT_WORKERS = 3
 
+# Pipeline parallel processing settings (T12)
+# Enable overlapping STT processing with LLM inference for CUDA backends
+_PIPELINE_PARALLEL_ENABLED: bool = True
+_PIPELINE_STT_CHUNK_SIZE_MS: int = 1000  # Process STT in 1s chunks for overlap
+
 
 @dataclass
 class TurnContext:
@@ -83,9 +88,16 @@ class SessionRuntime:
             self._stt_worker_task = asyncio.create_task(self._run_stt_worker())
 
     async def _run_stt_worker(self) -> None:
-        """Background coroutine that continuously processes audio from queue."""
+        """Background coroutine that continuously processes audio from queue.
+
+        For CUDA backends (faster-whisper-cuda), uses chunked processing to overlap
+        STT preprocessing with LLM inference. This reduces effective E2E latency.
+        """
         accumulated_pcm = bytearray()
         sample_rate = self.sample_rate
+        # For CUDA backends: process in chunks for overlap
+        # Chunk size for 16kHz mono PCM: 16000 samples/s * 1s = 16000 bytes
+        _CHUNK_BYTES = 16000  # 1 second of audio at 16kHz mono
 
         while not self.closed:
             try:
@@ -100,6 +112,7 @@ class SessionRuntime:
             if item is None:
                 # Poison pill - audio stream ended
                 if accumulated_pcm:
+                    # Final transcription
                     await self._process_stt(accumulated_pcm, sample_rate)
                     accumulated_pcm.clear()
                 break
@@ -107,6 +120,78 @@ class SessionRuntime:
             chunk, rate = item
             accumulated_pcm.extend(chunk)
             sample_rate = rate
+
+            # Pipeline parallel processing: start LLM as soon as we have a
+            # complete chunk transcribed. This overlaps STT with LLM inference.
+            if _PIPELINE_PARALLEL_ENABLED and len(accumulated_pcm) >= _CHUNK_BYTES:
+                turn_id = self.current_turn_id
+                turn = self.turns.get(turn_id) if turn_id else None
+                if turn and not turn.cancel_event.is_set():
+                    # Copy bytes to avoid race condition with shared buffer
+                    pcm_copy = bytes(accumulated_pcm)
+                    accumulated_pcm.clear()
+                    # Run STT in background to not block audio capture
+                    asyncio.create_task(self._process_stt_async(pcm_copy, sample_rate, turn_id))
+
+    async def _process_stt_async(
+        self,
+        pcm_bytes: bytes,
+        sample_rate: int,
+        turn_id: str,
+    ) -> None:
+        """Process STT asynchronously and start LLM when complete.
+
+        This runs STT in a background task, allowing audio capture to continue.
+        Once STT returns, LLM inference starts immediately (overlapping with
+        continued audio capture if the user is still speaking).
+        """
+        if not pcm_bytes:
+            return
+
+        # Security check: only process if this is still the current turn
+        # This prevents late STT results from triggering LLM for an old turn
+        # when a new turn has already started
+        if turn_id != self.current_turn_id:
+            logger.debug("STT async skipped: turn_id=%s current=%s", turn_id, self.current_turn_id)
+            return
+
+        turn = self.turns.get(turn_id) if turn_id else None
+        if turn and turn.cancel_event.is_set():
+            return
+
+        try:
+            final_text = ""
+            async for event_type, text in stt_service.transcribe_stream_events(
+                bytes(pcm_bytes),
+                sample_rate,
+            ):
+                if turn and turn.cancel_event.is_set():
+                    return
+                if event_type == "partial":
+                    await self.send_json({"type": "stt_partial", "text": text, "turn_id": turn_id})
+                    continue
+                if event_type == "final":
+                    final_text = text
+
+            if final_text.strip():
+                await self.send_json({"type": "stt_final", "text": final_text, "turn_id": turn_id})
+                # Only start response if not already running for this turn
+                if turn and not turn.cancel_event.is_set():
+                    existing_turn = self.turns.get(turn_id)
+                    if existing_turn and existing_turn.response_task and not existing_turn.response_task.done():
+                        # Response already running - don't restart
+                        pass
+                    else:
+                        # Key optimization: start LLM immediately after STT completes
+                        # This overlaps with any remaining audio capture
+                        await self.start_response(final_text, turn_id)
+        except Exception as exc:
+            logger.exception("STT async processing failed session=%s error=%s", self.session_id, exc)
+            await self.send_json({
+                "type": "error",
+                "code": "STT_FAILED",
+                "message": "语音识别失败",
+            })
 
     async def _process_stt(self, pcm_bytes: bytes, sample_rate: int) -> None:
         """Process accumulated PCM bytes through STT."""

@@ -22,6 +22,7 @@ from app.services.qwen_tts_service import qwen_tts_service
 
 
 TTS_PROVIDER_COSYVOICE2 = "cosyvoice2-http"
+TTS_PROVIDER_COQUI_XTTS_CUDA = "coqui-xtts-cuda"
 _TTS_MAX_CONCURRENT_WORKERS = 3  # Existing value
 
 
@@ -213,6 +214,28 @@ class TTSService:
         return wav_bytes, "wav", TTS_PROVIDER_COSYVOICE2
 
     async def stream_synthesize(self, text: str) -> AsyncIterator[bytes]:
+        if settings.TTS_BACKEND == TTS_PROVIDER_COQUI_XTTS_CUDA:
+            try:
+                from app.services.coqui_xtts_service import coqui_xtts_service
+                async for chunk in coqui_xtts_service.stream_synthesize(text):
+                    yield chunk
+                return
+            except Exception as exc:
+                logger.warning(
+                    "coqui-xtts-cuda failed, falling back to HTTP backends: %s", exc
+                )
+                # Fall back to qwen3-tts
+                try:
+                    async for chunk in qwen_tts_service.stream_synthesize(text):
+                        yield chunk
+                    return
+                except Exception as exc2:
+                    logger.warning(
+                        "qwen3-tts fallback also failed, falling back to cosyvoice2-http: %s",
+                        exc2,
+                    )
+                    # Fall through to cosyvoice2-http
+
         if settings.TTS_BACKEND == "qwen3-tts":
             async for chunk in qwen_tts_service.stream_synthesize(text):
                 yield chunk

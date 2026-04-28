@@ -14,6 +14,11 @@ from app.config import settings
 from app.services.audio_utils import resample_pcm_s16le as _resample_pcm_s16le
 from app.services.sensevoice_stt_service import sensevoice_stt_service
 
+try:
+    from app.services.faster_whisper_stt_service import faster_whisper_stt_service
+except ImportError:
+    faster_whisper_stt_service = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +38,16 @@ class STTService:
         self._extra_payload = self._parse_extra_payload(settings.FUNASR_EXTRA_PAYLOAD)
 
     async def ensure_model_ready(self) -> bool:
+        if self._backend == "faster-whisper-cuda":
+            if faster_whisper_stt_service is not None:
+                try:
+                    if await faster_whisper_stt_service.ensure_model_ready():
+                        return True
+                except Exception:
+                    pass
+                logger.warning("Faster-Whisper-CUDA not available, falling back to HTTP backend")
+            return await self._ensure_http_backend_ready()
+
         if self._backend == "sensevoice-http":
             return await sensevoice_stt_service.ensure_model_ready()
 
@@ -40,30 +55,7 @@ class STTService:
             logger.warning("Unsupported STT backend: %s", self._backend)
             return False
 
-        host = self._funasr_host()
-        parsed = urlparse(self._base_url)
-        configured_port = parsed.port
-        ports = (
-            tuple(dict.fromkeys((configured_port, 10095, 10096)))
-            if configured_port is not None
-            else (10095, 10096)
-        )
-
-        for port in ports:
-            try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    response = await client.get(
-                        f"http://{host}:{port}{self._health_path}"
-                    )
-                    if response.status_code < 400:
-                        return True
-            except Exception:
-                continue
-
-        logger.warning(
-            "FunASR health endpoint unavailable, runtime validation required"
-        )
-        return True
+        return await self._ensure_http_backend_ready()
 
     async def transcribe_streaming(
         self,
@@ -91,6 +83,23 @@ class STTService:
         pcm_bytes: bytes,
         sample_rate: int = _TARGET_SAMPLE_RATE,
     ) -> AsyncIterator[tuple[str, str]]:
+        if self._backend == "faster-whisper-cuda":
+            if faster_whisper_stt_service is not None:
+                try:
+                    async for event_type, text in faster_whisper_stt_service.transcribe_stream_events(
+                        pcm_bytes,
+                        sample_rate,
+                    ):
+                        yield event_type, text
+                    return
+                except Exception as exc:
+                    logger.warning("Faster-Whisper-CUDA failed, falling back to HTTP backend: %s", exc)
+
+            # Fall back to funasr-http
+            async for event_type, text in self._transcribe_funasr(pcm_bytes, sample_rate):
+                yield event_type, text
+            return
+
         if self._backend == "sensevoice-http":
             # Delegate to SenseVoice service
             async for event_type, text in sensevoice_stt_service.transcribe_stream_events(
@@ -103,6 +112,98 @@ class STTService:
         if self._backend != "funasr-http":
             raise RuntimeError(f"Unsupported STT backend: {self._backend}")
 
+        async for event_type, text in self._transcribe_funasr(pcm_bytes, sample_rate):
+            yield event_type, text
+
+    def _safe_json_loads(self, raw: str) -> dict | list | None:
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+    def _build_partials(self, online_texts: list[str], final_text: str) -> list[str]:
+        cleaned: list[str] = []
+        for text in online_texts:
+            if not text:
+                continue
+            if cleaned and text == cleaned[-1]:
+                continue
+            cleaned.append(text)
+
+        if not cleaned:
+            preview_len = max(1, min(8, len(final_text)))
+            if preview_len >= len(final_text):
+                return [final_text]
+            return [final_text[:preview_len], final_text]
+
+        if cleaned[-1] != final_text:
+            cleaned.append(final_text)
+        return cleaned
+
+    def _normalize_pcm16_mono(
+        self,
+        *,
+        pcm_bytes: bytes,
+        source_rate: int,
+        target_rate: int,
+    ) -> bytes:
+        if source_rate <= 0:
+            raise RuntimeError("invalid_sample_rate")
+
+        pcm = pcm_bytes
+        if len(pcm) % 2 != 0:
+            pcm = pcm[:-1]
+
+        if source_rate == target_rate:
+            return pcm
+
+        try:
+            converted = _resample_pcm_s16le(pcm, source_rate, target_rate)
+            logger.info(
+                "Resampled PCM from %sHz to %sHz (%s -> %s bytes)",
+                source_rate,
+                target_rate,
+                len(pcm),
+                len(converted),
+            )
+            return converted
+        except Exception as exc:
+            logger.exception("PCM resample failed: %s", exc)
+            raise RuntimeError("pcm_resample_failed") from exc
+
+    async def _ensure_http_backend_ready(self) -> bool:
+        """Check if funasr-http backend is ready."""
+        host = self._funasr_host()
+        parsed = urlparse(self._base_url)
+        configured_port = parsed.port
+        ports = (
+            tuple(dict.fromkeys((configured_port, 10095, 10096)))
+            if configured_port is not None
+            else (10095, 10096)
+        )
+
+        for port in ports:
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    response = await client.get(
+                        f"http://{host}:{port}{self._health_path}"
+                    )
+                    if response.status_code < 400:
+                        return True
+            except Exception:
+                continue
+
+        logger.warning(
+            "FunASR health endpoint unavailable, runtime validation required"
+        )
+        return True
+
+    async def _transcribe_funasr(
+        self,
+        pcm_bytes: bytes,
+        sample_rate: int = _TARGET_SAMPLE_RATE,
+    ) -> AsyncIterator[tuple[str, str]]:
+        """Transcribe using FunASR HTTP backend (fallback when CUDA fails)."""
         if not pcm_bytes:
             return
 
@@ -199,62 +300,6 @@ class STTService:
                 exc,
             )
             raise RuntimeError("stt_transcription_failed") from exc
-
-    def _safe_json_loads(self, raw: str) -> dict | list | None:
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return None
-
-    def _build_partials(self, online_texts: list[str], final_text: str) -> list[str]:
-        cleaned: list[str] = []
-        for text in online_texts:
-            if not text:
-                continue
-            if cleaned and text == cleaned[-1]:
-                continue
-            cleaned.append(text)
-
-        if not cleaned:
-            preview_len = max(1, min(8, len(final_text)))
-            if preview_len >= len(final_text):
-                return [final_text]
-            return [final_text[:preview_len], final_text]
-
-        if cleaned[-1] != final_text:
-            cleaned.append(final_text)
-        return cleaned
-
-    def _normalize_pcm16_mono(
-        self,
-        *,
-        pcm_bytes: bytes,
-        source_rate: int,
-        target_rate: int,
-    ) -> bytes:
-        if source_rate <= 0:
-            raise RuntimeError("invalid_sample_rate")
-
-        pcm = pcm_bytes
-        if len(pcm) % 2 != 0:
-            pcm = pcm[:-1]
-
-        if source_rate == target_rate:
-            return pcm
-
-        try:
-            converted = _resample_pcm_s16le(pcm, source_rate, target_rate)
-            logger.info(
-                "Resampled PCM from %sHz to %sHz (%s -> %s bytes)",
-                source_rate,
-                target_rate,
-                len(pcm),
-                len(converted),
-            )
-            return converted
-        except Exception as exc:
-            logger.exception("PCM resample failed: %s", exc)
-            raise RuntimeError("pcm_resample_failed") from exc
 
     def _funasr_host(self) -> str:
         parsed = urlparse(self._base_url)
