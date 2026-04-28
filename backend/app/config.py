@@ -48,6 +48,16 @@ class Settings(BaseSettings):
     LLAMA_MODEL_QUANT: str = "q4_k_m"
     LLAMA_FLASH_ATTENTION: bool = True
 
+    # Dynamic batching for LLM requests
+    LLM_BATCH_ENABLED: bool = False
+    LLM_BATCH_MAX_SIZE: int = 8
+    LLM_BATCH_TIMEOUT_MS: int = 100
+
+    # Early stopping for LLM generation
+    LLM_EARLY_STOPPING_ENABLED: bool = False
+    LLM_EARLY_STOPPING_MIN_TOKENS: int = 50
+    LLM_EARLY_STOPPING_MAX_TOKENS: int = 2048
+
     CLOUD_LLM_ENABLED: bool = False
     CLOUD_LLM_BASE_URL: str = ""
     CLOUD_LLM_API_KEY: str = ""

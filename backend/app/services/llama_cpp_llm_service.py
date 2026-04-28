@@ -4,11 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from typing import AsyncIterator
 
 from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BatchedRequest:
+    """A single request in the batch queue."""
+    prompt: str
+    temperature: float
+    max_tokens: int
+    stop: list[str] | None
+    future: asyncio.Future[str] = field(default_factory=asyncio.Future)
 
 
 class LlamaCppLLMService:
@@ -25,6 +36,9 @@ class LlamaCppLLMService:
         n_gpu_layers: int = 35,
         n_threads: int = 8,
         n_batch: int = 512,
+        batch_enabled: bool = False,
+        batch_max_size: int = 8,
+        batch_timeout_ms: int = 100,
     ) -> None:
         """Initialize the LLM service.
 
@@ -34,12 +48,25 @@ class LlamaCppLLMService:
             n_gpu_layers: Number of layers to offload to GPU (35 for RTX 5080 16GB).
             n_threads: CPU threads for inference.
             n_batch: Batch size for prompt processing.
+            batch_enabled: Enable dynamic request batching.
+            batch_max_size: Max requests per batch.
+            batch_timeout_ms: Timeout in ms before processing partial batch.
         """
         self.model_path = model_path or "/models/qwen3-8b.Q4_K_M.gguf"
         self.n_ctx = n_ctx
         self.n_gpu_layers = n_gpu_layers
         self.n_threads = n_threads
         self.n_batch = n_batch
+
+        # Dynamic batching settings
+        self.batch_enabled = batch_enabled
+        self.batch_max_size = batch_max_size
+        self.batch_timeout_ms = batch_timeout_ms
+
+        # Request queue and processing task for batching
+        self._request_queue: asyncio.Queue[BatchedRequest | None] = asyncio.Queue()
+        self._batch_task: asyncio.Task[None] | None = None
+        self._shutdown_event = asyncio.Event()
 
         self._model: Llama | None = None
         self._lock = asyncio.Lock()
@@ -73,6 +100,107 @@ class LlamaCppLLMService:
 
             await asyncio.to_thread(_load_sync)
             logger.info("llama.cpp model loaded successfully")
+
+        # Start batch processor if batching is enabled
+        if self.batch_enabled and self._batch_task is None:
+            self._shutdown_event.clear()
+            self._batch_task = asyncio.create_task(self._batch_processor())
+            logger.info(
+                f"Batch processor started: max_size={self.batch_max_size}, "
+                f"timeout={self.batch_timeout_ms}ms"
+            )
+
+    async def _batch_processor(self) -> None:
+        """Process batches of requests with dynamic sizing and timeout."""
+        logger.info("Batch processor task started")
+        while not self._shutdown_event.is_set():
+            try:
+                batch: list[BatchedRequest] = []
+                timeout_sec = self.batch_timeout_ms / 1000.0
+
+                # Wait for first request
+                first_req = await asyncio.wait_for(
+                    self._request_queue.get(),
+                    timeout=timeout_sec
+                )
+                batch.append(first_req)
+
+                # Collect more requests up to max_size
+                while len(batch) < self.batch_max_size:
+                    try:
+                        req = await asyncio.wait_for(
+                            self._request_queue.get(),
+                            timeout=timeout_sec
+                        )
+                        batch.append(req)
+                    except asyncio.TimeoutError:
+                        break
+
+                if batch:
+                    await self._process_batch(batch)
+
+            except asyncio.TimeoutError:
+                # No requests in queue, continue waiting
+                continue
+            except Exception as e:
+                logger.error(f"Batch processor error: {e}", exc_info=True)
+                await asyncio.sleep(0.1)
+
+        logger.info("Batch processor task stopped")
+
+    async def _process_batch(self, batch: list[BatchedRequest]) -> None:
+        """Process a batch of requests.
+
+        Args:
+            batch: List of BatchedRequest objects to process.
+        """
+        if not batch:
+            return
+
+        logger.debug(f"Processing batch of {len(batch)} requests")
+
+        # For llama.cpp, we process sequentially but can share model context
+        for req in batch:
+            try:
+                result = await self._generate(
+                    req.prompt,
+                    req.temperature,
+                    req.max_tokens,
+                    req.stop,
+                )
+                if not req.future.done():
+                    req.future.set_result(result)
+            except Exception as e:
+                logger.error(f"Request processing error: {e}", exc_info=True)
+                if not req.future.done():
+                    req.future.set_exception(e)
+
+    async def _submit_batched(
+        self,
+        prompt: str,
+        temperature: float,
+        max_tokens: int,
+        stop: list[str] | None,
+    ) -> str:
+        """Submit a request to the batch queue and wait for result.
+
+        Args:
+            prompt: The formatted prompt string.
+            temperature: Sampling temperature.
+            max_tokens: Maximum tokens to generate.
+            stop: Stop sequences to terminate generation.
+
+        Returns:
+            Complete generated response string.
+        """
+        request = BatchedRequest(
+            prompt=prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stop=stop,
+        )
+        await self._request_queue.put(request)
+        return await request.future
 
     def _build_prompt(self, messages: list[dict[str, str]]) -> str:
         """Build a prompt string from chat messages using Qwen2 format.
@@ -223,6 +351,9 @@ class LlamaCppLLMService:
         if stream:
             return self._stream_generate(prompt, temperature, max_tokens, stop)
         else:
+            # Use batching for non-streaming requests when enabled
+            if self.batch_enabled:
+                return await self._submit_batched(prompt, temperature, max_tokens, stop)
             return await self._generate(prompt, temperature, max_tokens, stop)
 
     def get_token_count(self, text: str) -> int:
@@ -243,5 +374,37 @@ class LlamaCppLLMService:
         approx_ratio = len(text) / 4
         return int(approx_ratio)
 
+    async def shutdown(self) -> None:
+        """Gracefully shutdown the batch processor."""
+        if self._batch_task is not None:
+            self._shutdown_event.set()
+            self._request_queue.put_nowait(None)  # Sentinel to unblock queue
+            await asyncio.gather(self._batch_task, return_exceptions=True)
+            self._batch_task = None
+            logger.info("Batch processor shutdown complete")
 
+
+def create_llama_cpp_llm_service(
+    batch_enabled: bool = False,
+    batch_max_size: int = 8,
+    batch_timeout_ms: int = 100,
+) -> LlamaCppLLMService:
+    """Factory function to create LLM service with batching config.
+
+    Args:
+        batch_enabled: Enable dynamic request batching.
+        batch_max_size: Max requests per batch.
+        batch_timeout_ms: Timeout in ms before processing partial batch.
+
+    Returns:
+        Configured LlamaCppLLMService instance.
+    """
+    return LlamaCppLLMService(
+        batch_enabled=batch_enabled,
+        batch_max_size=batch_max_size,
+        batch_timeout_ms=batch_timeout_ms,
+    )
+
+
+# Singleton instance - imported by other modules
 llama_cpp_llm_service = LlamaCppLLMService()
