@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import AsyncIterator
 
+from app.config import get_settings
 from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
+
+# End patterns for early stopping detection
+END_PATTERNS = [
+    re.compile(r"</s>"),
+    re.compile(r"<\|im_end\|>"),
+    re.compile(r"<end_turn>"),
+    re.compile(r"^STOP$", re.MULTILINE),
+]
 
 
 @dataclass
@@ -250,9 +260,25 @@ class LlamaCppLLMService:
 
         stop_sequences = stop or []
 
+        settings = get_settings()
+        tokens_generated = 0
+        text_buffer = []
+
         def _stream_sync() -> AsyncIterator[str]:
             def _token_callback(token: bytes) -> bool:
                 """Called for each generated token. Returns False to stop."""
+                nonlocal tokens_generated, text_buffer
+                if settings.LLM_EARLY_STOPPING_ENABLED:
+                    tokens_generated += 1
+                    decoded = token.decode("utf-8", errors="replace")
+                    text_buffer.append(decoded)
+                    if tokens_generated >= settings.LLM_EARLY_STOPPING_MIN_TOKENS:
+                        accumulated = "".join(text_buffer)
+                        for pattern in END_PATTERNS:
+                            if pattern.search(accumulated):
+                                return False
+                    if tokens_generated >= settings.LLM_EARLY_STOPPING_MAX_TOKENS:
+                        return False
                 return True
 
             try:
@@ -306,16 +332,32 @@ class LlamaCppLLMService:
 
         def _generate_sync() -> str:
             try:
+                settings = get_settings()
+                effective_max_tokens = (
+                    settings.LLM_EARLY_STOPPING_MAX_TOKENS
+                    if settings.LLM_EARLY_STOPPING_ENABLED
+                    else max_tokens
+                )
                 output = self._model(
                     prompt,
-                    max_tokens=max_tokens,
+                    max_tokens=effective_max_tokens,
                     temperature=temperature,
                     stop=stop_sequences,
                     stream=False,
                 )
+                text = ""
                 if hasattr(output, "choices"):
-                    return output["choices"][0]["text"]
-                return str(output)
+                    text = output["choices"][0]["text"]
+                else:
+                    text = str(output)
+                # Trim end patterns if early stopping enabled
+                if settings.LLM_EARLY_STOPPING_ENABLED:
+                    for pattern in END_PATTERNS:
+                        match = pattern.search(text)
+                        if match:
+                            text = text[:match.start()]
+                            break
+                return text
             except Exception as e:
                 logger.error(f"Non-streaming generation error: {e}")
                 raise
